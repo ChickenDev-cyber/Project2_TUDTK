@@ -79,261 +79,240 @@ def vif(X):
 
 def verify_solution(X, y, beta_hat, H):
     from sklearn.linear_model import LinearRegression
-    from sklearn.metrics import r2_score
     
     if beta_hat is None: 
-        print("Không có hệ số để kiểm chứng.")
+        print("Kiểm chứng: Không có hệ số để đối chiếu.")
         return
     
     try:
         if np.allclose(H @ H, H, atol=1e-5):
-            print("-> Verify OK: Ma trận chiều H thỏa tính chất Idempotent (H^2 = H).")
+            print("Kiểm tra tính chất Idempotent (H^2 = H): Giống")
         else:
-            print("-> SAI: Ma trận chiều H không thỏa tính chất Idempotent.")
+            print("Kiểm tra tính chất Idempotent (H^2 = H): Khác")
             
         sk_model = LinearRegression(fit_intercept=False).fit(X, y)
         if np.allclose(beta_hat, sk_model.coef_, atol=1e-5):
-            print("-> Verify OK: Hệ số Beta chính xác hoàn toàn với thư viện sklearn.")
+            print("Đối chiếu hệ số Beta với sklearn: Giống")
         else:
-            print("-> SAI: Hệ số Beta không khớp với thư viện sklearn!")
+            print("Đối chiếu hệ số Beta với sklearn: Khác")
             
     except Exception as e:
-        print(f"Xảy ra lỗi khi kiểm chứng OLS: {e}")
-
-def run_tests(test_cases):
-    warnings.filterwarnings('ignore')
-    
-    for idx, test in enumerate(test_cases, 1):
-        X = np.array(test['X'], dtype=float)
-        y = np.array(test['y'], dtype=float)
-        p = X.shape[1] - 1
-        
-        print("-" * 65)
-        print(f"TEST CASE {idx}: {test['name']}")
-        print(f"Kích thước ma trận (X): {X.shape}")
-        print(f"Kích thước vector (y): {y.shape}")
-
-        try:
-            beta_hat, sigma2_hat = ols_fit(X, y)
-            
-            if beta_hat is not None:
-                formatted_beta = ", ".join([f"{v:.4f}" for v in beta_hat])
-                print(f"   Vector hệ số Beta: [{formatted_beta}]")
-                print(f"   Phương sai nhiễu (sigma^2): {sigma2_hat:.4f}")
-                
-                y_hat = X @ beta_hat
-                RSS, TSS, r2, adj_r2, f_stat = model_metrics(y, y_hat, p)
-                print(f"   Hệ số xác định R^2: {r2:.4f}")
-                
-                if p > 1:
-                    vif_scores = vif(X)
-                    formatted_vif = ", ".join([f"{v:.4f}" for v in vif_scores])
-                    print(f"   Chỉ số VIF của các biến: [{formatted_vif}]")
-                
-                H = hat_matrix(X)
-                verify_solution(X, y, beta_hat, H)
-            else:
-                print("   => Không tìm được nghiệm OLS do ma trận X^T X bị suy biến.")
-                
-        except Exception as e:
-            print(f"   [OLS] Lỗi chương trình: {e}")
-
-        #print("-" * 65 + "\n")
+        print(f"Lỗi xảy ra trong quá trình đối chiếu thư viện: {e}")
 
 
-# UNIT TESTS — kiểm tra từng hàm với expected output đã biết
-def run_unit_tests():
-    warnings.filterwarnings('ignore')
-
-    unit_test_cases = []
-
-    # Dữ liệu dùng chung
+def test_ols_fit():
+    print("--- Phân tích OLS Fit ---")
     X_small = np.array([[1,1],[1,2],[1,3],[1,4],[1,5]], dtype=float)
-    y_small = np.array([3, 5, 7, 9, 11], dtype=float)  # y = 1 + 2x, không nhiễu
-
+    y_small = np.array([3, 5, 7, 9, 11], dtype=float)
+    
     X_intercept = np.ones((6, 1))
     y_intercept = np.array([2, 4, 4, 4, 5, 7], dtype=float)
+    
+    beta, sigma2 = ols_fit(X_small, y_small)
+    beta2, sigma2_2 = ols_fit(X_intercept, y_intercept)
+    
+    # 1. Kiểm tra Beta đúng với y = 1 + 2x không nhiễu
+    if np.allclose(beta, [1.0, 2.0], atol=1e-8):
+        print("Kiểm tra Beta ước lượng: Giống")
+    else:
+        print("Kiểm tra Beta ước lượng: Khác")
+        
+    if sigma2 < 1e-10:
+        print("Kiểm tra sigma2 xấp xỉ 0: Giống")
+    else:
+        print("Kiểm tra sigma2 xấp xỉ 0: Khác")
+        
+    # 2. Kiểm tra Intercept-only, beta = mean(y)
+    if np.allclose(beta2, [np.mean(y_intercept)], atol=1e-8):
+        print("Kiểm tra Beta = mean(y): Giống")
+    else:
+        print("Kiểm tra Beta = mean(y): Khác")
+        
+    if np.allclose(sigma2_2, np.var(y_intercept, ddof=1), atol=1e-8):
+        print("Kiểm tra sigma2 = variance mẫu: Giống")
+    else:
+        print("Kiểm tra sigma2 = variance mẫu: Khác")
+        
+def test_hat_matrix():
+    print("\n--- Phân tích Hat Matrix ---")
+    X_small = np.array([[1,1],[1,2],[1,3],[1,4],[1,5]], dtype=float)
+    y_small = np.array([3, 5, 7, 9, 11], dtype=float)
+    
+    H = hat_matrix(X_small)
+    rank_H = np.linalg.matrix_rank(H)
+    
+    if np.allclose(H @ H, H, atol=1e-8):
+        print("Kiểm tra tính chất Idempotent (H^2 = H): Giống")
+    else:
+        print("Kiểm tra tính chất Idempotent (H^2 = H): Khác")
+        
+    if np.allclose(H, H.T, atol=1e-8):
+        print("Kiểm tra tính đối xứng (H = H.T): Giống")
+    else:
+        print("Kiểm tra tính đối xứng (H = H.T): Khác")
+        
+    if rank_H == 2:
+        print("Kiểm tra hạng ma trận (rank = p+1): Giống")
+    else:
+        print("Kiểm tra hạng ma trận (rank = p+1): Khác")
+        
+    if np.allclose(H @ y_small, y_small, atol=1e-8):
+        print("Kiểm tra tính chiếu (Hy = y): Giống")
+    else:
+        print("Kiểm tra tính chiếu (Hy = y): Khác")
 
-    np.random.seed(0)
-    n_big = 50
-    X_big = np.column_stack([np.ones(n_big), np.random.randn(n_big, 5)])
-    y_big = 3 + 2 * X_big[:, 1] + np.random.randn(n_big)
+def test_model_metrics():
+    print("\n--- Phân tích Model Metrics ---")
+    X_small = np.array([[1,1],[1,2],[1,3],[1,4],[1,5]], dtype=float)
+    y_small = np.array([3, 5, 7, 9, 11], dtype=float)
+    
+    beta, _ = ols_fit(X_small, y_small)
+    y_hat_small = X_small @ beta
+    RSS, TSS, r2, adj_r2, f_stat = model_metrics(y_small, y_hat_small, p=1)
+    
+    y_const = np.array([1, 2, 3, 4, 5], dtype=float)
+    y_hat_mean = np.full_like(y_const, np.mean(y_const))
+    _, _, r2_zero, _, _ = model_metrics(y_const, y_hat_mean, p=1)
+    
+    if RSS < 1e-10:
+        print("Kiểm tra RSS xấp xỉ 0 khi fit hoàn hảo: Giống")
+    else:
+        print("Kiểm tra RSS xấp xỉ 0 khi fit hoàn hảo: Khác")
+        
+    if np.isclose(r2, 1.0, atol=1e-8):
+        print("Kiểm tra R^2 = 1.0: Giống")
+    else:
+        print("Kiểm tra R^2 = 1.0: Khác")
+        
+    if np.isclose(r2_zero, 0.0, atol=1e-8):
+        print("Kiểm tra R^2 = 0 khi y_hat = mean(y): Giống")
+    else:
+        print("Kiểm tra R^2 = 0 khi y_hat = mean(y): Khác")
 
+def test_coef_inference():
+    print("\n--- Phân tích Coef Inference ---")
     np.random.seed(42)
     n_inf = 200
     X_inf_feat = np.random.randn(n_inf, 2)
     X_inf = np.column_stack([np.ones(n_inf), X_inf_feat])
+    # β0 = 5, β1 = 3, β2 = 0 (tạo biến không ý nghĩa)
     y_inf = 5 + 3 * X_inf_feat[:, 0] + np.random.randn(n_inf)
+    
+    beta_inf, sigma2_inf = ols_fit(X_inf, y_inf)
+    se, t_stats, p_values, ci_lower, ci_upper = coef_inference(X_inf, y_inf, beta_inf, sigma2_inf)
+    
+    if p_values[1] < 0.01:
+        print("Kiểm tra p-value < 0.01 (biến có ý nghĩa): Giống")
+    else:
+        print("Kiểm tra p-value < 0.01 (biến có ý nghĩa): Khác")
+        
+    if p_values[2] > 0.05:
+        print("Kiểm tra p-value > 0.05 (biến không ý nghĩa): Giống")
+    else:
+        print("Kiểm tra p-value > 0.05 (biến không ý nghĩa): Khác")
+        
+    if ci_lower[0] <= 5.0 <= ci_upper[0]:
+        print("Kiểm tra CI chứa Beta_0 = 5: Giống")
+    else:
+        print("Kiểm tra CI chứa Beta_0 = 5: Khác")
+        
+    if ci_lower[1] <= 3.0 <= ci_upper[1]:
+        print("Kiểm tra CI chứa Beta_1 = 3: Giống")
+    else:
+        print("Kiểm tra CI chứa Beta_1 = 3: Khác")
 
+def test_vif():
+    print("\n--- Phân tích VIF ---")
     np.random.seed(7)
     n_vif = 100
     X_indep = np.column_stack([np.ones(n_vif), np.random.randn(n_vif), np.random.randn(n_vif)])
     x_base = np.random.randn(n_vif)
     X_collinear = np.column_stack([np.ones(n_vif), x_base, x_base + np.random.randn(n_vif)*0.01, np.random.randn(n_vif)])
-
-    # ols_fit
-    beta, sigma2 = ols_fit(X_small, y_small)
-    beta2, sigma2_2 = ols_fit(X_intercept, y_intercept)
-
-    unit_test_cases.append({
-        'name': 'ols_fit — TC1: Beta đúng với y = 1 + 2x không nhiễu',
-        'checks': [
-            f"   Beta ước lượng:  {np.round(beta, 4).tolist()}",
-            f"   Beta kỳ vọng:    [1.0, 2.0]",
-            f"-> {'Verify OK' if np.allclose(beta, [1.0, 2.0], atol=1e-8) else 'SAI'}: beta = [1.0, 2.0]",
-            f"   sigma²:          {sigma2:.2e}",
-            f"-> {'Verify OK' if sigma2 < 1e-10 else 'SAI'}: sigma² ≈ 0 khi không có nhiễu",
-        ]
-    })
-
-    unit_test_cases.append({
-        'name': 'ols_fit — TC2: Intercept-only, beta = mean(y)',
-        'checks': [
-            f"   Beta ước lượng:  {beta2[0]:.4f}",
-            f"   mean(y):         {np.mean(y_intercept):.4f}",
-            f"-> {'Verify OK' if np.allclose(beta2, [np.mean(y_intercept)], atol=1e-8) else 'SAI'}: beta = mean(y)",
-            f"   sigma²:          {sigma2_2:.4f}",
-            f"   sigma² kỳ vọng: {np.var(y_intercept, ddof=1):.4f}",
-            f"-> {'Verify OK' if np.allclose(sigma2_2, np.var(y_intercept, ddof=1), atol=1e-8) else 'SAI'}: sigma² = variance mẫu",
-        ]
-    })
-
-    # hat_matrix
-    H = hat_matrix(X_small)
-    rank_H = np.linalg.matrix_rank(H)
-
-    unit_test_cases.append({
-        'name': 'hat_matrix — TC1: Tính chất Idempotent và đối xứng',
-        'checks': [
-            f"-> {'Verify OK' if np.allclose(H @ H, H, atol=1e-8) else 'SAI'}: H² = H (Idempotent)",
-            f"-> {'Verify OK' if np.allclose(H, H.T, atol=1e-8) else 'SAI'}: H = Hᵀ (Đối xứng)",
-        ]
-    })
-
-    unit_test_cases.append({
-        'name': 'hat_matrix — TC2: rank(H) và tính chiếu Hy = y',
-        'checks': [
-            f"   rank(H):         {rank_H}",
-            f"   rank kỳ vọng:    2  (= p+1)",
-            f"-> {'Verify OK' if rank_H == 2 else 'SAI'}: rank(H) = p+1",
-            f"-> {'Verify OK' if np.allclose(H @ y_small, y_small, atol=1e-8) else 'SAI'}: Hy = y khi y ∈ col(X)",
-        ]
-    })
-
-    # model_metrics
-    y_hat_small = X_small @ beta
-    RSS, TSS, r2, adj_r2, f_stat = model_metrics(y_small, y_hat_small, p=1)
-
-    y_const = np.array([1, 2, 3, 4, 5], dtype=float)
-    y_hat_mean = np.full_like(y_const, np.mean(y_const))
-    _, _, r2_zero, _, _ = model_metrics(y_const, y_hat_mean, p=1)
-
-    beta_big, _ = ols_fit(X_big, y_big)
-    _, _, r2_b, adj_r2_b, _ = model_metrics(y_big, X_big @ beta_big, p=5)
-
-    unit_test_cases.append({
-        'name': 'model_metrics — TC1: R² = 1 khi fit hoàn hảo',
-        'checks': [
-            f"   RSS:             {RSS:.2e}",
-            f"   R²:              {r2:.6f}",
-            f"-> {'Verify OK' if RSS < 1e-10 else 'SAI'}: RSS ≈ 0",
-            f"-> {'Verify OK' if np.isclose(r2, 1.0, atol=1e-8) else 'SAI'}: R² = 1.0",
-        ]
-    })
-
-    unit_test_cases.append({
-        'name': 'model_metrics — TC2: R² = 0 khi ŷ = mean(y), adj_R² ≤ R²',
-        'checks': [
-            f"   R² (ŷ=mean):     {r2_zero:.6f}",
-            f"-> {'Verify OK' if np.isclose(r2_zero, 0.0, atol=1e-8) else 'SAI'}: R² = 0 khi ŷ = mean(y)",
-            f"   R²:              {r2_b:.4f}  |  adj_R²: {adj_r2_b:.4f}",
-            f"-> {'Verify OK' if adj_r2_b <= r2_b + 1e-10 else 'SAI'}: adj_R² ≤ R²",
-        ]
-    })
-
-    # coef_inference
-    beta_inf, sigma2_inf = ols_fit(X_inf, y_inf)
-    se, t_stats, p_values, ci_lower, ci_upper = coef_inference(X_inf, y_inf, beta_inf, sigma2_inf)
-
-    unit_test_cases.append({
-        'name': 'coef_inference — TC1: p-value phân biệt biến có/không ý nghĩa',
-        'checks': [
-            f"   p-value β₁ (≈3): {p_values[1]:.4f}",
-            f"-> {'Verify OK' if p_values[1] < 0.01 else 'SAI'}: p-value < 0.01 (biến có ý nghĩa)",
-            f"   p-value β₂ (≈0): {p_values[2]:.4f}",
-            f"-> {'Verify OK' if p_values[2] > 0.05 else 'SAI'}: p-value > 0.05 (biến không ý nghĩa)",
-        ]
-    })
-
-    unit_test_cases.append({
-        'name': 'coef_inference — TC2: CI 95% chứa beta thật',
-        'checks': [
-            f"   CI β₀: [{ci_lower[0]:.3f}, {ci_upper[0]:.3f}]",
-            f"-> {'Verify OK' if ci_lower[0] <= 5.0 <= ci_upper[0] else 'SAI'}: CI chứa β₀ = 5",
-            f"   CI β₁: [{ci_lower[1]:.3f}, {ci_upper[1]:.3f}]",
-            f"-> {'Verify OK' if ci_lower[1] <= 3.0 <= ci_upper[1] else 'SAI'}: CI chứa β₁ = 3",
-        ]
-    })
-
-    # vif
+    
     vif_indep = vif(X_indep)
     vif_collinear = vif(X_collinear)
+    
+    if all(v < 2.0 for v in vif_indep):
+        print("Kiểm tra VIF < 2 cho biến độc lập: Giống")
+    else:
+        print("Kiểm tra VIF < 2 cho biến độc lập: Khác")
+        
+    if vif_collinear[0] > 100 or vif_collinear[1] > 100:
+        print("Kiểm tra VIF > 100 cho biến đa cộng tuyến: Giống")
+    else:
+        print("Kiểm tra VIF > 100 cho biến đa cộng tuyến: Khác")
+        
+    if vif_collinear[2] < 5.0:
+        print("Kiểm tra VIF < 5 cho biến không liên quan: Giống")
+    else:
+        print("Kiểm tra VIF < 5 cho biến không liên quan: Khác")
 
-    unit_test_cases.append({
-        'name': 'vif — TC1: VIF ≈ 1 khi các biến độc lập nhau',
-        'checks': [
-            f"   VIF:             {[round(float(v),3) for v in vif_indep]}",
-            f"-> {'Verify OK' if all(v < 2.0 for v in vif_indep) else 'SAI'}: Tất cả VIF < 2",
-        ]
-    })
+def run_all_unit_tests():
+    warnings.filterwarnings('ignore')
+    print("--------------- Unit Test ---------------")
+    test_ols_fit()
+    test_hat_matrix()
+    test_model_metrics()
+    test_coef_inference()
+    test_vif()
+    print("-----------------------------------------------")
 
-    unit_test_cases.append({
-        'name': 'vif — TC2: VIF lớn khi có đa cộng tuyến',
-        'checks': [
-            f"   VIF:             {[round(float(v),1) for v in vif_collinear]}",
-            f"-> {'Verify OK' if vif_collinear[0] > 100 or vif_collinear[1] > 100 else 'SAI'}: VIF > 100 cho biến đa cộng tuyến",
-            f"-> {'Verify OK' if vif_collinear[2] < 5.0 else 'SAI'}: VIF[X3] = {vif_collinear[2]:.3f} < 5 (biến không liên quan)",
-        ]
-    })
-
-    for idx, test in enumerate(unit_test_cases, 1):
-        print("-" * 65)
-        print(f"UNIT TEST {idx}: {test['name']}")
-        for line in test['checks']:
-            print(line)
-    print("-" * 65 + "\n")
-
-
-# Test
-if __name__ == "__main__":
+def test_integration_simple_regression():
+    print("--- Integration Test: Hồi quy tuyến tính đơn ---")
     np.random.seed(42)
+    n = 50
+    X_features = np.random.rand(n, 1) * 10
+    X = np.column_stack([np.ones(n), X_features])
+    y = 5 + 3 * X_features[:, 0] + np.random.randn(n) * 0.5
     
-    # Test case 1: Hồi quy tuyến tính đơn (1 biến X)
-    n1 = 50
-    X1_features = np.random.rand(n1, 1) * 10
-    X1 = np.column_stack([np.ones(n1), X1_features])
-    y1 = 5 + 3 * X1_features[:, 0] + np.random.randn(n1) * 0.5
+    print(f"Kích thước X: {X.shape}, y: {y.shape}")
+    beta_hat, sigma2_hat = ols_fit(X, y)
     
-    # Test case 2: Hồi quy tuyến tính bội (3 biến X)
-    n2 = 100
-    X2_features = np.random.rand(n2, 3) * 5
-    X2 = np.column_stack([np.ones(n2), X2_features])
-    y2 = 2.5 - 1.5 * X2_features[:, 0] + 4 * X2_features[:, 1] - 0.8 * X2_features[:, 2] + np.random.randn(n2) * 1.2
+    print(f"Vector hệ số Beta: {[round(float(v), 4) for v in beta_hat]}")
+    print(f"Phương sai nhiễu (sigma^2): {sigma2_hat:.4f}")
+    
+    y_hat = X @ beta_hat
+    _, _, r2, _, _ = model_metrics(y, y_hat, p=1)
+    print(f"Hệ số xác định R^2: {r2:.4f}")
+    
+    H = hat_matrix(X)
+    verify_solution(X, y, beta_hat, H)
 
-    test_cases = [
-        {
-            'name': 'Hồi quy tuyến tính đơn (Simple Linear Regression)',
-            'X': X1.tolist(),
-            'y': y1.tolist()
-        },
-        {
-            'name': 'Hồi quy tuyến tính bội (Multiple Linear Regression)',
-            'X': X2.tolist(),
-            'y': y2.tolist()
-        }
-    ]
+def test_integration_multiple_regression():
+    print("\n--- Integration Test: Hồi quy tuyến tính bội ---")
+    np.random.seed(42)
+    n = 100
+    X_features = np.random.rand(n, 3) * 5
+    X = np.column_stack([np.ones(n), X_features])
+    y = 2.5 - 1.5 * X_features[:, 0] + 4 * X_features[:, 1] - 0.8 * X_features[:, 2] + np.random.randn(n) * 1.2
     
-    run_unit_tests()
+    print(f"Kích thước X: {X.shape}, y: {y.shape}")
+    beta_hat, sigma2_hat = ols_fit(X, y)
     
-    print("Integration Test")
-    run_tests(test_cases)
+    print(f"Vector hệ số Beta: {[round(float(v), 4) for v in beta_hat]}")
+    print(f"Phương sai nhiễu (sigma^2): {sigma2_hat:.4f}")
+    
+    y_hat = X @ beta_hat
+    _, _, r2, _, _ = model_metrics(y, y_hat, p=3)
+    print(f"Hệ số xác định R^2: {r2:.4f}")
+    
+    vif_scores = vif(X)
+    print(f"Chỉ số VIF của các biến: {[round(float(v), 4) for v in vif_scores]}")
+    
+    H = hat_matrix(X)
+    verify_solution(X, y, beta_hat, H)
+
+def run_all_integration_tests():
+    print("-------------- Integration Test --------------")
+    test_integration_simple_regression()
+    test_integration_multiple_regression()
+    print("-----------------------------------------------")
+
+
+if __name__ == "__main__":
+    
+    # Chạy Unit Tests mẫu của nhóm
+    run_all_unit_tests()
+    
+    # Chạy thử nghiệm tích hợp trên tập dữ liệu mô phỏng
+    run_all_integration_tests()
