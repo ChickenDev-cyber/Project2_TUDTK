@@ -1,11 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats 
-# from part1.ols_implementation import hat_matrix
-
-# Hàm hat_matrix tạm
-def mock_hat_matrix(X):
-    return X @ np.linalg.inv(X.T @ X) @ X.T
+from ols_implementation import hat_matrix
 
 # Vẽ 4 biểu đồ phân tích phần dư.
 def residual_plots(X, y, beta_hat):
@@ -17,7 +13,7 @@ def residual_plots(X, y, beta_hat):
     residuals = y - y_hat
     
     # 2. TÍNH LEVERAGE (Đường chéo của Hat matrix)
-    H = mock_hat_matrix(X) 
+    H = hat_matrix(X) 
     leverage = np.diag(H)
     
     # 3. TÍNH PHẦN DƯ CHUẨN HÓA 
@@ -63,25 +59,55 @@ def residual_plots(X, y, beta_hat):
     plt.show()
 
 
-if __name__ == "__main__":
-    print("Đang khởi tạo dữ liệu giả lập để test residual_plots...")
-    
-    # 1. Cố định random_state để kết quả không đổi mỗi lần chạy
+def test_residual_analysis():
+    # Unit test cho phân tích phần dư
     np.random.seed(42)
+    n = 10
+    p = 2
+    X = np.column_stack((np.ones(n), np.random.randn(n, p)))
+    beta_hat = np.array([1.0, 2.0, -1.0])
+    y = X @ beta_hat + np.random.normal(0, 0.1, n)
     
-    # 2. Tạo ma trận X giả (Ví dụ n=200 dòng, p=3 biến theo tiêu chí đồ án)
-    n = 200
-    p = 3
-    # X phải có cột đầu tiên là số 1 (intercept)
-    X_mock = np.column_stack((np.ones(n), np.random.randn(n, p)))
+    H = hat_matrix(X)
+    leverage = np.diag(H)
     
-    # 3. Tạo vector hệ số beta_hat giả (gồm 4 hệ số vì có intercept)
+    # 1. So sánh tổng leverage với p + 1
+    sum_leverage = np.sum(leverage)
+    if np.isclose(sum_leverage, p + 1):
+        print("Kiểm tra tổng leverage: Giống")
+    else:
+        print("Kiểm tra tổng leverage: Khác")
+        
+    # 2. Kiểm tra leverage hợp lệ
+    if np.all(leverage >= -1e-10) and np.all(leverage <= 1.0 + 1e-10):
+        print("Kiểm tra giá trị leverage: Giống")
+    else:
+        print("Kiểm tra giá trị leverage: Khác")
+        
+    # 3. Kiểm tra Cook's distance không âm
+    y_hat = X @ beta_hat
+    residuals = y - y_hat
+    RSS = np.sum(residuals**2)
+    sigma2_hat = RSS / (n - p - 1)
+    std_residuals = residuals / np.sqrt(sigma2_hat * (1 - leverage + 1e-10))
+    cooks_d = (std_residuals**2 / (p + 1)) * (leverage / (1 - leverage + 1e-10))
+    if np.all(cooks_d >= 0):
+        print("Kiểm tra Cook's distance: Giống")
+    else:
+        print("Kiểm tra Cook's distance: Khác")
+
+if __name__ == "__main__":
+    # Chạy test
+    test_residual_analysis()
+    
+    # Vẽ đồ thị demo
+    np.random.seed(42)
+    n_mock = 200
+    p_mock = 3
+    X_mock = np.column_stack((np.ones(n_mock), np.random.randn(n_mock, p_mock)))
     beta_hat_mock = np.array([2.5, 1.2, -0.8, 3.0])
+    y_mock = X_mock @ beta_hat_mock + np.random.normal(0, 1.5, n_mock)
     
-    # 4. Tạo vector y giả (y = X*beta + nhiễu ngẫu nhiên)
-    y_mock = X_mock @ beta_hat_mock + np.random.normal(0, 1.5, n)
-    
-    # 5. Gọi hàm để vẽ thử
-    print("Dữ liệu đã sẵn sàng. Đang vẽ biểu đồ...")
+    print("\nĐang vẽ biểu đồ...")
     residual_plots(X_mock, y_mock, beta_hat_mock)
-    print("Test hoàn tất!")
+    print("Vẽ biểu đồ hoàn tất!")
