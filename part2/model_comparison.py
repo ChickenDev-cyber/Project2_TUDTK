@@ -28,7 +28,7 @@ def train_ols(X_train, y_train):
 
 def train_ols_selected(X_train, y_train, threshold=10.0, num_cols_count=6):
     """
-    num_cols_count: Số lượng cột liên tục (numeric) nằm ở phần đầu của ma trận X_train.
+    num_cols_count: Số lượng cột liên tục (numeric) nằm ở phần đầu của ma trận X_train
     """
     X_df = X_train.copy()
     
