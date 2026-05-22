@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 def ridge_fit(X: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
     """
@@ -96,4 +97,9 @@ def test_ridge_fit():
         print("So sánh hệ số khi lambda cực lớn: Khác")
         
 if __name__ == "__main__":
+    if sys.stdout.encoding != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass
     test_ridge_fit()

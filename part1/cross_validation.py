@@ -1,5 +1,6 @@
 import numpy as np
 from ridge_lasso import ridge_fit
+import sys
 
 def kfold_cv(X: np.ndarray, y: np.ndarray, k: int, lam: float, seed: int = 42) -> float:
     """
@@ -50,4 +51,9 @@ def test_kfold_cv():
         print("So sánh độ lệch MSE khi đổi seed (kỳ vọng khác nhau): Khác")
 
 if __name__ == "__main__":
+    if sys.stdout.encoding != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass
     test_kfold_cv()
