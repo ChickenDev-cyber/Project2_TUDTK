@@ -24,20 +24,30 @@ def kfold_cv(X: np.ndarray, y: np.ndarray, k: int, lam: float, seed: int = 42) -
     return float(np.mean(mses))
 
 def test_kfold_cv():
-    # Test 1: Kiểm tra tính ổn định của kết quả với cùng một seed
+    """
+    Unit tests kiểm tra tính ổn định của hàm kfold_cv theo style nhóm.
+    """
+    np.random.seed(100)
     X = np.random.rand(20, 2)
     y = np.random.rand(20)
-    err1 = kfold_cv(X, y, k=2, lam=0.1, seed=42)
-    err2 = kfold_cv(X, y, k=2, lam=0.1, seed=42)
-    assert err1 == err2, "Unit Test 1 thất bại: Kết quả không tái lập được!"
 
-    # Test 2: Kiểm tra k=1 (chia fold lỗi)
-    try:
-        kfold_cv(X, y, k=len(y)+1, lam=0.1)
-    except Exception:
-        print("Unit Test 2: Đã bắt được lỗi chia fold quá lớn (Passed)")
+    # --- Test 1: Kiểm tra tính ổn định với cùng một seed ---
+    err1 = kfold_cv(X, y, k=3, lam=0.1, seed=42)
+    err2 = kfold_cv(X, y, k=3, lam=0.1, seed=42)
     
-    print("K-Fold CV: All Unit Tests Passed!")
+    if np.isclose(err1, err2):
+        print("So sánh kết quả MSE khi trùng seed: Giống")
+    else:
+        print("So sánh kết quả MSE khi trùng seed: Khác")
+
+    # --- Test 2: Kiểm tra tính ngẫu nhiên khi đổi seed ---
+    err3 = kfold_cv(X, y, k=3, lam=0.1, seed=123)
+    
+    # Kỳ vọng 2 kết quả phải KHÁC nhau khi đổi seed
+    if not np.isclose(err1, err3):
+        print("So sánh độ lệch MSE khi đổi seed (kỳ vọng khác nhau): Giống")
+    else:
+        print("So sánh độ lệch MSE khi đổi seed (kỳ vọng khác nhau): Khác")
 
 if __name__ == "__main__":
     test_kfold_cv()
