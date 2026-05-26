@@ -166,8 +166,14 @@ FIT – HCMUS Toán Ứng Dụng và Thống Kê
 Ước lượng không chệch của σ2:
 ˆσ2 = RSS
 n − p − 1 =
-y − X ˆβ
-
+
+
+
+y − X ˆβ
+
+
+
+
 2
 n − p − 1 . (7)
 1.3. Đánh Giá Mô Hình
@@ -551,4 +557,4 @@ Truy cập miễn phí: https://probml.github.io/pml-book/book1.html
 [6] Jake V anderPlas.Python Data Science Handbook. O’Reilly, 2016.https://jakevdp.
 github.io/PythonDataScienceHandbook/
 [7] Wes McKinney. Python for Data Analysis , 3rd ed. O’Reilly, 2022.
-Đồ án 2 | Data Fitting và Phương pháp OLS Trang 17/17
+Đồ án 2 | Data Fitting và Phương pháp OLS Trang 17/17N
