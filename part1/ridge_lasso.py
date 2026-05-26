@@ -3,12 +3,22 @@ import matplotlib.pyplot as plt
 import sys
 
 
+def _solve_linear_system(A: np.ndarray, b: np.ndarray) -> np.ndarray:
+    try:
+        return np.linalg.solve(A, b)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(A) @ b
+
+
 def ridge_fit(X: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
     """
     Tính toán trọng số Ridge Regression bằng công thức đóng.
     Lý luận: lam giúp kiểm soát độ lớn trọng số, ngăn chặn overfitting.
     """
     # Đảm bảo y có dạng cột (N, 1) để phép nhân ma trận nhất quán
+    if lam < 0:
+        raise ValueError("lam must be non-negative")
+
     if y.ndim == 1:
         y = y.reshape(-1, 1)
         
@@ -20,7 +30,7 @@ def ridge_fit(X: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
     b = X.T @ y
     
     # Sử dụng np.linalg.solve thay vì inv() để tăng độ chính xác số học
-    w = np.linalg.solve(A, b)
+    w = _solve_linear_system(A, b)
     return w.flatten()
 
 def plot_ridge_trace(X: np.ndarray, y: np.ndarray):
@@ -188,12 +198,12 @@ def test_lasso_fit_cd():
     y = X @ beta_true + np.random.randn(n) * 0.5
 
     lam = 0.1
-    w_cd = lasso_fit_cd(X, y, lam=lam, max_iter=3000)
+    w_cd = lasso_fit_cd(X, y, lam=lam * n, max_iter=3000)
 
-    # Kiểm chứng với sklearn (fit_intercept=False vì X đã có cột 1)
-    sk = SkLasso(alpha=lam, fit_intercept=False, max_iter=10000)
-    sk.fit(X, y)
-    w_sk = sk.coef_
+    # Kiểm chứng với sklearn (fit_intercept=True, truyền vào X_feat)
+    sk = SkLasso(alpha=lam, fit_intercept=True, max_iter=10000)
+    sk.fit(X_feat, y)
+    w_sk = np.concatenate([[sk.intercept_], sk.coef_])
 
     # --- Test 1: Hệ số gần với sklearn (rtol=10%) ---
     if np.allclose(w_cd, w_sk, atol=0.1):

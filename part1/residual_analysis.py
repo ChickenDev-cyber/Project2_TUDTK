@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats 
 from ols_implementation import hat_matrix
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Vẽ 4 biểu đồ phân tích phần dư.
 def residual_plots(X, y, beta_hat):

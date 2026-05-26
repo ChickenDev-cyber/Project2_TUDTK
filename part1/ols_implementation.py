@@ -1,10 +1,32 @@
 import numpy as np
 from scipy import stats
 import warnings
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+
+def _solve_normal_equation(X, y):
+    gram = X.T @ X
+    rhs = X.T @ y
+    try:
+        return np.linalg.solve(gram, rhs)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(gram) @ rhs
+
+
+def _gram_inverse(X):
+    gram = X.T @ X
+    identity = np.eye(gram.shape[0])
+    try:
+        return np.linalg.solve(gram, identity)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(gram)
+
 
 def ols_fit(X, y):
-    X_T = X.T
-    beta_hat = np.linalg.inv(X_T @ X) @ X_T @ y
+    beta_hat = _solve_normal_equation(X, y)
     
     y_hat = X @ beta_hat
     phan_du = y - y_hat
@@ -19,7 +41,7 @@ def ols_fit(X, y):
 
 def hat_matrix(X):
     X_T = X.T
-    H = X @ np.linalg.inv(X_T @ X) @ X_T
+    H = X @ _gram_inverse(X) @ X_T
     return H
 
 def model_metrics(y, y_hat, p):
@@ -29,10 +51,15 @@ def model_metrics(y, y_hat, p):
     y_bar = np.mean(y)
     TSS = np.sum((y - y_bar)**2)
     
-    r2 = 1 - (RSS / TSS)
-    adj_r2 = 1 - ((n - 1) / (n - p - 1)) * (1 - r2)
-    
-    f_stat = ((TSS - RSS) / p) / (RSS / (n - p - 1))
+    r2 = np.nan if np.isclose(TSS, 0.0) else 1 - (RSS / TSS)
+    adj_r2 = np.nan if n - p - 1 <= 0 else 1 - ((n - 1) / (n - p - 1)) * (1 - r2)
+
+    if p <= 0 or n - p - 1 <= 0:
+        f_stat = np.nan
+    elif np.isclose(RSS, 0.0):
+        f_stat = np.inf
+    else:
+        f_stat = ((TSS - RSS) / p) / (RSS / (n - p - 1))
     
     return RSS, TSS, r2, adj_r2, f_stat
 
@@ -41,7 +68,7 @@ def coef_inference(X, y, beta_hat, sigma2_hat):
     p_cong_1 = X.shape[1]
     df = n - p_cong_1
     
-    cov_matrix = sigma2_hat * np.linalg.inv(X.T @ X)
+    cov_matrix = sigma2_hat * _gram_inverse(X)
     se = np.sqrt(np.diag(cov_matrix))
     
     t_stats = beta_hat / se
@@ -63,7 +90,7 @@ def vif(X):
         X_tam = np.delete(dac_trung, j, axis=1)
         X_tam = np.column_stack([np.ones(X_tam.shape[0]), X_tam])
         
-        beta_tam = np.linalg.inv(X_tam.T @ X_tam) @ X_tam.T @ y_tam
+        beta_tam = _solve_normal_equation(X_tam, y_tam)
         y_tam_hat = X_tam @ beta_tam
         
         RSS_tam = np.sum((y_tam - y_tam_hat)**2)
