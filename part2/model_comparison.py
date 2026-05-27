@@ -1,176 +1,212 @@
-import numpy as np
-import pandas as pd
+import math
+import os
 import sys
 
-# Import các hàm từ Part 1
-sys.path.append('../part1')
-try:
-    from cross_validation import kfold_cv
-    from ridge_lasso import ridge_fit
-except ImportError:
-    pass
+import pandas as pd
+
+# Import các hàm đại số tuyến tính tự cài đặt từ Part 1
+_PART1_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'part1'))
+if _PART1_DIR not in sys.path:
+    sys.path.insert(0, _PART1_DIR)
+
+from matrix_ops import (
+    Matrix,
+    Vector,
+    as_matrix,
+    as_vector,
+    matvec,
+)
+from ols_implementation import ols_fit, vif
+from ridge_lasso import ridge_fit
+from cross_validation import ridge_cv_score
+
+
+# ──────────────────────────────────────────────
+# Hàm tiện ích chuyển đổi kiểu dữ liệu
+# ──────────────────────────────────────────────
+
+def _to_list(data):
+    """Chuyển pandas/Vector/list sang list thuần Python."""
+    if isinstance(data, pd.Series):
+        return data.tolist()
+    if isinstance(data, pd.DataFrame):
+        return data.iloc[:, 0].tolist()
+    if hasattr(data, 'tolist'):
+        return data.tolist()
+    return list(data)
+
+
+def _to_vector(data):
+    """Chuyển pandas/list sang Vector (part1)."""
+    return as_vector(_to_list(data))
+
+
+def _to_matrix_rows(data):
+    """Chuyển DataFrame/array sang list-of-lists thuần Python."""
+    if isinstance(data, pd.DataFrame):
+        return data.values.tolist()
+    if isinstance(data, (Matrix, list)):
+        return [list(row) for row in data]
+    if hasattr(data, 'tolist'):
+        return data.tolist()
+    return [list(row) for row in data]
+
+
+# ──────────────────────────────────────────────
+# Thêm cột intercept (cột toàn 1)
+# ──────────────────────────────────────────────
 
 def add_intercept(X):
-    if isinstance(X, pd.DataFrame):
-        X = X.values
-    return np.c_[np.ones((X.shape[0], 1)), X]
+    """Thêm cột 1 (intercept) vào đầu ma trận X. Trả về Matrix (part1)."""
+    rows = _to_matrix_rows(X)
+    return as_matrix([[1.0] + [float(v) for v in row] for row in rows])
+
+
+# ──────────────────────────────────────────────
+# Huấn luyện OLS cơ bản (dùng ols_fit từ Part 1)
+# ──────────────────────────────────────────────
 
 def train_ols(X_train, y_train):
+    """OLS: beta = (X^T X)^{-1} X^T y — kế thừa từ Part 1."""
     X_b = add_intercept(X_train)
-    y = y_train.values if isinstance(y_train, (pd.Series, pd.DataFrame)) else y_train
-    
-    try:
-        beta_hat = np.linalg.inv(X_b.T @ X_b) @ X_b.T @ y
-    except np.linalg.LinAlgError:
-        # Xử lý nhiễu vi phân (Tikhonov Regularization)
-        beta_hat = np.linalg.inv(X_b.T @ X_b + np.eye(X_b.shape[1]) * 1e-8) @ X_b.T @ y
+    y = _to_vector(y_train)
+    beta_hat, _sigma2 = ols_fit(X_b, y)
     return beta_hat
+
+
+# ──────────────────────────────────────────────
+# OLS với chọn biến theo VIF (dùng vif từ Part 1)
+# ──────────────────────────────────────────────
 
 def train_ols_selected(X_train, y_train, threshold=10.0, num_cols_count=6):
     """
-    num_cols_count: Số lượng cột liên tục (numeric) nằm ở phần đầu của ma trận X_train.
+    Lọc biến bằng VIF (kế thừa Part 1). Chỉ quét VIF trên các cột số thực
+    (num_cols_count cột đầu), giữ nguyên cột One-Hot để tránh Dummy Variable Trap.
     """
     X_df = X_train.copy()
-    
-    # Chỉ trích xuất các cột số thực để quét VIF, tránh Dummy Variable Trap từ OneHotEncoder
     numeric_cols = list(X_df.columns[:num_cols_count])
-    
-    while True:
-        X_num = X_df[numeric_cols]
-        corr_matrix = np.corrcoef(X_num.values, rowvar=False)
+
+    while len(numeric_cols) > 0:
+        # Xây ma trận design có intercept cho VIF
+        X_num_list = X_df[numeric_cols].values.tolist()
+        X_with_intercept = as_matrix(
+            [[1.0] + [float(v) for v in row] for row in X_num_list]
+        )
+
         try:
-            inv_corr = np.linalg.inv(corr_matrix)
-            vifs = np.diag(inv_corr)
-        except np.linalg.LinAlgError:
-            # Drop biến đầu tiên nếu ma trận corr suy biến hoàn toàn
+            vif_scores = vif(X_with_intercept)  # Từ part1/ols_implementation.py
+        except ValueError:
+            # Ma trận suy biến → loại biến đầu tiên
             col_to_drop = numeric_cols[0]
             X_df = X_df.drop(col_to_drop, axis=1)
             numeric_cols.remove(col_to_drop)
             continue
-            
-        max_vif_idx = np.argmax(vifs)
-        max_vif = vifs[max_vif_idx]
-        
+
+        max_vif_idx = max(range(len(vif_scores)), key=lambda i: vif_scores[i])
+        max_vif = vif_scores[max_vif_idx]
+
         if max_vif > threshold:
             col_to_drop = numeric_cols[max_vif_idx]
             X_df = X_df.drop(col_to_drop, axis=1)
             numeric_cols.remove(col_to_drop)
         else:
             break
-            
-    # Hồi quy OLS với các biến số thực đã lọc + toàn bộ biến One-hot
+
+    # Hồi quy OLS với các biến đã lọc
     beta_hat = train_ols(X_df, y_train)
     return beta_hat, X_df.columns.tolist()
 
+
+# ──────────────────────────────────────────────
+# Ridge / Lasso với Cross-Validation (kế thừa Part 1)
+# ──────────────────────────────────────────────
+
 def train_ridge_lasso(X_train, y_train, k=5):
+    """Chọn lambda tốt nhất bằng k-fold CV, sau đó fit Ridge."""
     lambdas = [0.01, 0.1, 1.0, 10.0, 100.0]
     best_lambda = None
     best_cv_score = float('inf')
-    
-    # 1. Thêm Intercept (Cột số 1) để đồng bộ với OLS
-    X_b = add_intercept(X_train) 
-    
-    # 2. Chuyển y sang numpy array
-    y_val = y_train.values if isinstance(y_train, pd.Series) else y_train
+
+    X_b = add_intercept(X_train)
+    y = _to_vector(y_train)
+
+    # Chuyển sang dạng list thuần cho các hàm Part 1
+    X_list = [list(row) for row in X_b]
+    y_list = list(y)
 
     for lam in lambdas:
-        # Truyền ma trận đã có Intercept (X_b) vào kfold_cv
-        cv_score = kfold_cv(X_b, y_val, k=k, lam=lam)
+        cv_score = ridge_cv_score(X_list, y_list, k, lam)
         if cv_score < best_cv_score:
             best_cv_score = cv_score
             best_lambda = lam
 
-    # Truyền ma trận đã có Intercept (X_b) vào ridge_fit
-    beta_hat_ridge = ridge_fit(X_b, y_val, best_lambda)
-    
+    beta_hat_ridge = ridge_fit(X_list, y_list, best_lambda)
     return beta_hat_ridge, best_lambda
 
+
+# ──────────────────────────────────────────────
+# Đánh giá mô hình (MAE, RMSE, R²) — thuần Python
+# ──────────────────────────────────────────────
+
 def evaluate_models(y_true, y_pred):
-    y_t = np.array(y_true).flatten()
-    y_p = np.array(y_pred).flatten()
-    
-    mae = np.mean(np.abs(y_t - y_p))
-    rmse = np.sqrt(np.mean((y_t - y_p)**2))
-    tss = np.sum((y_t - np.mean(y_t))**2)
-    rss = np.sum((y_t - y_p)**2)
-    r2 = 1 - (rss / tss)
-    
+    """Tính MAE, RMSE, R² — không dùng numpy."""
+    y_t = _to_list(y_true)
+    y_p = _to_list(y_pred)
+    n = len(y_t)
+
+    mae = sum(abs(y_t[i] - y_p[i]) for i in range(n)) / n
+    mse = sum((y_t[i] - y_p[i]) ** 2 for i in range(n)) / n
+    rmse = math.sqrt(mse)
+
+    y_mean = sum(y_t) / n
+    tss = sum((v - y_mean) ** 2 for v in y_t)
+    rss = sum((y_t[i] - y_p[i]) ** 2 for i in range(n))
+    r2 = 1 - (rss / tss) if abs(tss) > 1e-12 else 0.0
+
     return {'MAE': mae, 'RMSE': rmse, 'R-squared': r2}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import numpy as np
-import pandas as pd
-
-def mean_absolute_error_numpy(y_true, y_pred):
-    return np.mean(np.abs(y_true - y_pred))
-
-def root_mean_squared_error_numpy(y_true, y_pred):
-    return np.sqrt(np.mean((y_true - y_pred)**2))
-
-def r2_score_numpy(y_true, y_pred):
-    ss_res = np.sum((y_true - y_pred)**2)
-    ss_tot = np.sum((y_true - np.mean(y_true))**2)
-    return 1 - (ss_res / ss_tot)
-
 def evaluate_model(y_true, y_pred, is_log_transformed=True):
     """
-    Tính toán sai số bằng thuần Numpy. Đảo ngược thang đo Logarit để ra sai số thực tế.
+    Tính MAE, RMSE, R² — thuần Python.
+    Đảo ngược thang đo Logarit (expm1) để ra sai số thực tế.
     """
+    y_t = _to_list(y_true)
+    y_p = _to_list(y_pred)
+
     if is_log_transformed:
-        y_true_real = np.expm1(y_true)
-        y_pred_real = np.expm1(y_pred)
-    else:
-        y_true_real = y_true
-        y_pred_real = y_pred
+        y_t = [math.expm1(v) for v in y_t]
+        y_p = [math.expm1(v) for v in y_p]
 
-    # Dùng hàm tự build thay vì sklearn
-    mae = mean_absolute_error_numpy(y_true_real, y_pred_real)
-    rmse = root_mean_squared_error_numpy(y_true_real, y_pred_real)
-    r2 = r2_score_numpy(y_true_real, y_pred_real)
+    n = len(y_t)
+    mae = sum(abs(y_t[i] - y_p[i]) for i in range(n)) / n
+    mse = sum((y_t[i] - y_p[i]) ** 2 for i in range(n)) / n
+    rmse = math.sqrt(mse)
 
-    return {
-        'MAE': mae,
-        'RMSE': rmse,
-        'R-squared': r2
-    }
+    y_mean = sum(y_t) / n
+    tss = sum((v - y_mean) ** 2 for v in y_t)
+    rss = sum((y_t[i] - y_p[i]) ** 2 for i in range(n))
+    r2 = 1 - (rss / tss) if abs(tss) > 1e-12 else 0.0
+
+    return {'MAE': mae, 'RMSE': rmse, 'R-squared': r2}
+
 
 def compare_models(predictions_dict, y_true, is_log_transformed=True):
     results = {}
     for model_name, y_pred in predictions_dict.items():
         results[model_name] = evaluate_model(y_true, y_pred, is_log_transformed)
-    
+
     df_results = pd.DataFrame(results).T
     df_results = df_results[['MAE', 'RMSE', 'R-squared']]
     return df_results
 
+
 def compare_train_test_models(train_preds, test_preds, y_train, y_test, is_log=True):
     df_train = compare_models(train_preds, y_train, is_log)
     df_train.columns = [f"Train_{c}" for c in df_train.columns]
-    
+
     df_test = compare_models(test_preds, y_test, is_log)
     df_test.columns = [f"Test_{c}" for c in df_test.columns]
-    
+
     df_final = pd.concat([df_train, df_test], axis=1)
     return df_final
