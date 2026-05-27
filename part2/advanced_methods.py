@@ -7,7 +7,7 @@ if part1_path not in sys.path:
     sys.path.append(part1_path)
 
 from matrix_ops import (
-    inverse, solve, transpose, matmul, identity, matrix_add, as_matrix, as_vector
+    inverse, solve, cg_solve, transpose, matmul, identity, matrix_add, as_matrix, as_vector
 )
 import math
 
@@ -96,11 +96,27 @@ class KernelRidgeRegression:
     def _compute_rbf_kernel(self, X1, X2):
         n1 = len(X1)
         n2 = len(X2)
+        d = len(X1[0])
         K = [[0.0 for _ in range(n2)] for _ in range(n1)]
-        for i in range(n1):
-            for j in range(n2):
-                sq_dist = sum((X1[i][k] - X2[j][k])**2 for k in range(len(X1[0])))
-                K[i][j] = math.exp(-self.gamma * sq_dist)
+        is_symmetric = (X1 is X2)
+        
+        if is_symmetric:
+            for i in range(n1):
+                K[i][i] = 1.0
+                row_i = X1[i]
+                for j in range(i + 1, n1):
+                    row_j = X2[j]
+                    sq_dist = sum([(a - b)*(a - b) for a, b in zip(row_i, row_j)])
+                    val = math.exp(-self.gamma * sq_dist)
+                    K[i][j] = val
+                    K[j][i] = val
+        else:
+            for i in range(n1):
+                row_i = X1[i]
+                for j in range(n2):
+                    row_j = X2[j]
+                    sq_dist = sum([(a - b)*(a - b) for a, b in zip(row_i, row_j)])
+                    K[i][j] = math.exp(-self.gamma * sq_dist)
         return K
 
     def fit(self, X, y):
@@ -117,11 +133,11 @@ class KernelRidgeRegression:
         n_samples = len(self.X_train)
         K = self._compute_rbf_kernel(self.X_train, self.X_train)
         
-        I = identity(n_samples)
-        I_scaled = [[self.lam * val for val in row] for row in I]
-        A = matrix_add(K, I_scaled)
+        # Optimize memory and speed: Add lambda directly to the diagonal of K
+        for i in range(n_samples):
+            K[i][i] += self.lam
         
-        alpha_arr = solve(A, self.y_train)
+        alpha_arr = cg_solve(K, self.y_train)
         self.alpha_coef = alpha_arr.tolist() if hasattr(alpha_arr, 'tolist') else alpha_arr
             
         return self
