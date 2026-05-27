@@ -6,8 +6,8 @@
 
 **Nhóm sinh viên thực hiện:**
 
-| STT | MSSV | Họ và Tên | Phân công chính |
-|:---:|:---:|:---|:---|
+| STT | MSSV | Họ và Tên | 
+|:---:|:---:|:---|
 | 1 | 24120151 | Phạm Minh Trọng | 
 | 2 | 24120033 | Đào Tiến Đạt | 
 | 3 | 24120167 | Bùi Nhật Bảo | 
