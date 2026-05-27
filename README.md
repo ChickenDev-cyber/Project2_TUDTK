@@ -8,11 +8,11 @@
 
 | STT | MSSV | Họ và Tên | Phân công chính |
 |:---:|:---:|:---|:---|
-| 1 | 24120151 | Phạm Minh Trọng | Code Part 2, Dataset và EDA |
-| 2 | 24120033 | Đào Tiến Đạt | Ridge, Lasso, Cross-Validation |
-| 3 | 24120167 | Bùi Nhật Bảo | Code Part 2, Tiền xử lý và mô hình |
-| 4 | 24120199 | Trịnh Kim Mai | OLS, Hat Matrix, lý thuyết OLS |
-| 5 | 24120221 | Trần Công Quang | Residual Analysis, Notebook, kết quả và báo cáo |
+| 1 | 24120151 | Phạm Minh Trọng | 
+| 2 | 24120033 | Đào Tiến Đạt | 
+| 3 | 24120167 | Bùi Nhật Bảo | 
+| 4 | 24120199 | Trịnh Kim Mai | 
+| 5 | 24120221 | Trần Công Quang |
 
 ---
 
