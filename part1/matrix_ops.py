@@ -96,6 +96,8 @@ def is_matrix_like(data):
 
 
 def as_vector(data):
+    if isinstance(data, Vector):
+        return data
     data = _raw_list(data)
     if isinstance(data, (int, float)):
         return Vector([float(data)])
@@ -107,6 +109,8 @@ def as_vector(data):
 
 
 def as_matrix(data):
+    if isinstance(data, Matrix):
+        return data
     data = _raw_list(data)
     if not data:
         return Matrix()
@@ -133,7 +137,7 @@ def transpose(A):
 def dot(u, v):
     u = as_vector(u)
     v = as_vector(v)
-    return sum(a * b for a, b in zip(u, v))
+    return sum([a * b for a, b in zip(u, v)])
 
 
 def matvec(A, v):
@@ -203,6 +207,34 @@ def solve(A, b, tol=1e-12):
 
     return Vector(aug[i][n] for i in range(n))
 
+
+def cg_solve(A, b, tol=1e-8, max_iter=2000):
+    A = as_matrix(A)
+    b = as_vector(b)
+    n = len(b)
+    if not n:
+        return Vector()
+    x = Vector([0.0] * n)
+    r = Vector(list(b))
+    p = Vector(list(r))
+    rsold = sum(ri * ri for ri in r)
+    for i in range(max_iter):
+        Ap = [sum([a * b for a, b in zip(row, p)]) for row in A]
+        p_Ap = sum([pi * api for pi, api in zip(p, Ap)])
+        if p_Ap == 0:
+            break
+        alpha = rsold / p_Ap
+        for j in range(n):
+            x[j] += alpha * p[j]
+            r[j] -= alpha * Ap[j]
+        rsnew = sum([ri * ri for ri in r])
+        if math.sqrt(rsnew) < tol:
+            break
+        ratio = rsnew / rsold
+        for j in range(n):
+            p[j] = r[j] + ratio * p[j]
+        rsold = rsnew
+    return x
 
 def inverse(A):
     A = as_matrix(A)
