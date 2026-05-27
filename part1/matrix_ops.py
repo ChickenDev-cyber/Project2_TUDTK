@@ -1,4 +1,5 @@
 import math
+import operator
 
 
 class Vector(list):
@@ -137,7 +138,7 @@ def transpose(A):
 def dot(u, v):
     u = as_vector(u)
     v = as_vector(v)
-    return sum([a * b for a, b in zip(u, v)])
+    return sum(map(operator.mul, u, v))
 
 
 def matvec(A, v):
@@ -193,8 +194,7 @@ def solve(A, b, tol=1e-12):
             aug[col], aug[pivot] = aug[pivot], aug[col]
 
         pivot_value = aug[col][col]
-        for j in range(col, n + 1):
-            aug[col][j] /= pivot_value
+        aug[col][col:] = [val / pivot_value for val in aug[col][col:]]
 
         for r in range(n):
             if r == col:
@@ -202,8 +202,7 @@ def solve(A, b, tol=1e-12):
             factor = aug[r][col]
             if abs(factor) < tol:
                 continue
-            for j in range(col, n + 1):
-                aug[r][j] -= factor * aug[col][j]
+            aug[r][col:] = [ar - factor * ac for ar, ac in zip(aug[r][col:], aug[col][col:])]
 
     return Vector(aug[i][n] for i in range(n))
 
@@ -217,24 +216,22 @@ def cg_solve(A, b, tol=1e-8, max_iter=2000):
     x = Vector([0.0] * n)
     r = Vector(list(b))
     p = Vector(list(r))
-    rsold = sum(ri * ri for ri in r)
+    rsold = sum(map(operator.mul, r, r))
     for i in range(max_iter):
-        Ap = [sum([a * b for a, b in zip(row, p)]) for row in A]
-        p_Ap = sum([pi * api for pi, api in zip(p, Ap)])
+        Ap = [sum(map(operator.mul, row, p)) for row in A]
+        p_Ap = sum(map(operator.mul, p, Ap))
         if p_Ap == 0:
             break
         alpha = rsold / p_Ap
-        for j in range(n):
-            x[j] += alpha * p[j]
-            r[j] -= alpha * Ap[j]
-        rsnew = sum([ri * ri for ri in r])
+        x = [xj + alpha * pj for xj, pj in zip(x, p)]
+        r = [rj - alpha * apj for rj, apj in zip(r, Ap)]
+        rsnew = sum(map(operator.mul, r, r))
         if math.sqrt(rsnew) < tol:
             break
         ratio = rsnew / rsold
-        for j in range(n):
-            p[j] = r[j] + ratio * p[j]
+        p = [rj + ratio * pj for rj, pj in zip(r, p)]
         rsold = rsnew
-    return x
+    return Vector(x)
 
 def inverse(A):
     A = as_matrix(A)
@@ -260,7 +257,7 @@ def variance(values):
 
 def sum_squares(values):
     values = as_vector(values)
-    return sum(x * x for x in values)
+    return sum(map(operator.mul, values, values))
 
 
 def diag(A):
@@ -274,7 +271,7 @@ def trace(A):
 
 def frobenius_norm(A):
     A = as_matrix(A)
-    return math.sqrt(sum(x * x for row in A for x in row))
+    return math.sqrt(sum(map(operator.mul, (x for row in A for x in row), (x for row in A for x in row))))
 
 
 def all_close(a, b, atol=1e-8):

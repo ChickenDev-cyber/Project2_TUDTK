@@ -10,6 +10,7 @@ from matrix_ops import (
     inverse, solve, cg_solve, transpose, matmul, identity, matrix_add, as_matrix, as_vector
 )
 import math
+import operator
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -106,7 +107,8 @@ class KernelRidgeRegression:
                 row_i = X1[i]
                 for j in range(i + 1, n1):
                     row_j = X2[j]
-                    sq_dist = sum([(a - b)*(a - b) for a, b in zip(row_i, row_j)])
+                    d_val = math.dist(row_i, row_j)
+                    sq_dist = d_val * d_val
                     val = math.exp(-self.gamma * sq_dist)
                     K[i][j] = val
                     K[j][i] = val
@@ -115,7 +117,8 @@ class KernelRidgeRegression:
                 row_i = X1[i]
                 for j in range(n2):
                     row_j = X2[j]
-                    sq_dist = sum([(a - b)*(a - b) for a, b in zip(row_i, row_j)])
+                    d_val = math.dist(row_i, row_j)
+                    sq_dist = d_val * d_val
                     K[i][j] = math.exp(-self.gamma * sq_dist)
         return K
 
@@ -146,9 +149,7 @@ class KernelRidgeRegression:
         X_test = X.values.tolist() if hasattr(X, 'values') else X.tolist()
         K_test = self._compute_rbf_kernel(X_test, self.X_train)
         
-        alpha_mat = as_matrix([[v] for v in self.alpha_coef])
-        pred_arr = matmul(K_test, alpha_mat)
-        pred_list = [row[0] for row in pred_arr]
+        pred_list = [sum(map(operator.mul, row, self.alpha_coef)) for row in K_test]
             
         return pred_list
 
