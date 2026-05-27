@@ -28,7 +28,7 @@ def train_ols(X_train, y_train):
 
 def train_ols_selected(X_train, y_train, threshold=10.0, num_cols_count=6):
     """
-    num_cols_count: Số lượng cột liên tục (numeric) nằm ở phần đầu của ma trận X_train
+    num_cols_count: Số lượng cột liên tục (numeric) nằm ở phần đầu của ma trận X_train.
     """
     X_df = X_train.copy()
     
@@ -42,7 +42,7 @@ def train_ols_selected(X_train, y_train, threshold=10.0, num_cols_count=6):
             inv_corr = np.linalg.inv(corr_matrix)
             vifs = np.diag(inv_corr)
         except np.linalg.LinAlgError:
-            # Drop thẳng tay biến đầu tiên nếu ma trận corr suy biến hoàn toàn
+            # Drop biến đầu tiên nếu ma trận corr suy biến hoàn toàn
             col_to_drop = numeric_cols[0]
             X_df = X_df.drop(col_to_drop, axis=1)
             numeric_cols.remove(col_to_drop)
@@ -58,7 +58,7 @@ def train_ols_selected(X_train, y_train, threshold=10.0, num_cols_count=6):
         else:
             break
             
-    # Hồi quy OLS với các biến số thực đã lọc + Toàn bộ biến One-hot
+    # Hồi quy OLS với các biến số thực đã lọc + toàn bộ biến One-hot
     beta_hat = train_ols(X_df, y_train)
     return beta_hat, X_df.columns.tolist()
 
@@ -67,7 +67,7 @@ def train_ridge_lasso(X_train, y_train, k=5):
     best_lambda = None
     best_cv_score = float('inf')
     
-    # 1. Thêm Intercept (Cột đầu) để đồng bộ với OLS
+    # 1. Thêm Intercept (Cột số 1) để đồng bộ với OLS
     X_b = add_intercept(X_train) 
     
     # 2. Chuyển y sang numpy array
@@ -96,3 +96,81 @@ def evaluate_models(y_true, y_pred):
     r2 = 1 - (rss / tss)
     
     return {'MAE': mae, 'RMSE': rmse, 'R-squared': r2}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import numpy as np
+import pandas as pd
+
+def mean_absolute_error_numpy(y_true, y_pred):
+    return np.mean(np.abs(y_true - y_pred))
+
+def root_mean_squared_error_numpy(y_true, y_pred):
+    return np.sqrt(np.mean((y_true - y_pred)**2))
+
+def r2_score_numpy(y_true, y_pred):
+    ss_res = np.sum((y_true - y_pred)**2)
+    ss_tot = np.sum((y_true - np.mean(y_true))**2)
+    return 1 - (ss_res / ss_tot)
+
+def evaluate_model(y_true, y_pred, is_log_transformed=True):
+    """
+    Tính toán sai số bằng thuần Numpy. Đảo ngược thang đo Logarit để ra sai số thực tế.
+    """
+    if is_log_transformed:
+        y_true_real = np.expm1(y_true)
+        y_pred_real = np.expm1(y_pred)
+    else:
+        y_true_real = y_true
+        y_pred_real = y_pred
+
+    # Dùng hàm tự build thay vì sklearn
+    mae = mean_absolute_error_numpy(y_true_real, y_pred_real)
+    rmse = root_mean_squared_error_numpy(y_true_real, y_pred_real)
+    r2 = r2_score_numpy(y_true_real, y_pred_real)
+
+    return {
+        'MAE': mae,
+        'RMSE': rmse,
+        'R-squared': r2
+    }
+
+def compare_models(predictions_dict, y_true, is_log_transformed=True):
+    results = {}
+    for model_name, y_pred in predictions_dict.items():
+        results[model_name] = evaluate_model(y_true, y_pred, is_log_transformed)
+    
+    df_results = pd.DataFrame(results).T
+    df_results = df_results[['MAE', 'RMSE', 'R-squared']]
+    return df_results
+
+def compare_train_test_models(train_preds, test_preds, y_train, y_test, is_log=True):
+    df_train = compare_models(train_preds, y_train, is_log)
+    df_train.columns = [f"Train_{c}" for c in df_train.columns]
+    
+    df_test = compare_models(test_preds, y_test, is_log)
+    df_test.columns = [f"Test_{c}" for c in df_test.columns]
+    
+    df_final = pd.concat([df_train, df_test], axis=1)
+    return df_final
