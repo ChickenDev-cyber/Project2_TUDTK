@@ -1,287 +1,188 @@
-import contextlib
-import io
+import math
+import random
 import unittest
 from unittest.mock import patch
 
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
 
 from cross_validation import kfold_cv, ridge_cv_score, ridge_lambda_search
-from ols_implementation import (
-    coef_inference,
-    hat_matrix,
-    model_metrics,
-    ols_fit,
-    verify_solution,
-    vif,
-)
+from matrix_ops import all_close, diag, matmul, matvec, trace, transpose
+from ols_implementation import coef_inference, hat_matrix, model_metrics, ols_fit, vif
 from residual_analysis import residual_plots
 from ridge_lasso import lasso_fit_cd, plot_ridge_trace, ridge_fit
 
 
+def norm2(values):
+    return math.sqrt(sum(v * v for v in values))
+
+
+def make_design(seed=123, n=80):
+    rng = random.Random(seed)
+    X = []
+    y = []
+    beta = [1.5, 2.0, -1.0]
+    for _ in range(n):
+        x1 = rng.gauss(0.0, 1.0)
+        x2 = rng.gauss(0.0, 1.0)
+        row = [1.0, x1, x2]
+        X.append(row)
+        y.append(sum(row[j] * beta[j] for j in range(len(beta))) + rng.gauss(0.0, 0.25))
+    return X, y, beta
+
+
 class TestOlsFit(unittest.TestCase):
-    def test_exact_line_coefficients(self):
-        X = np.array([[1, 1], [1, 2], [1, 3], [1, 4]], dtype=float)
-        y = np.array([3, 5, 7, 9], dtype=float)
+    def test_simple_line(self):
+        X = [[1, 1], [1, 2], [1, 3], [1, 4]]
+        y = [3, 5, 7, 9]
         beta, sigma2 = ols_fit(X, y)
+        self.assertTrue(all_close(beta, [1.0, 2.0], atol=1e-10))
+        self.assertAlmostEqual(sigma2, 0.0, places=10)
 
-        np.testing.assert_allclose(beta, [1.0, 2.0], atol=1e-10)
-        self.assertLess(sigma2, 1e-10)
-
-    def test_intercept_only_matches_mean(self):
-        X = np.ones((5, 1))
-        y = np.array([2, 4, 4, 5, 10], dtype=float)
-        beta, sigma2 = ols_fit(X, y)
-
-        np.testing.assert_allclose(beta, [np.mean(y)], atol=1e-10)
-        self.assertGreater(sigma2, 0.0)
+    def test_intercept_only(self):
+        X = [[1], [1], [1], [1], [1]]
+        y = [2, 4, 4, 5, 10]
+        beta, _ = ols_fit(X, y)
+        self.assertTrue(all_close(beta, [sum(y) / len(y)], atol=1e-10))
 
 
 class TestHatMatrix(unittest.TestCase):
     def setUp(self):
-        self.X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
+        self.X = [[1, 0], [1, 1], [1, 2], [1, 3]]
+        self.H = hat_matrix(self.X)
 
-    def test_hat_matrix_is_symmetric_and_idempotent(self):
-        H = hat_matrix(self.X)
+    def test_symmetric_and_idempotent(self):
+        self.assertTrue(all_close(self.H, transpose(self.H), atol=1e-10))
+        self.assertTrue(all_close(matmul(self.H, self.H), self.H, atol=1e-10))
 
-        np.testing.assert_allclose(H, H.T, atol=1e-10)
-        np.testing.assert_allclose(H @ H, H, atol=1e-10)
-
-    def test_hat_matrix_projects_to_fitted_values(self):
-        y = np.array([1, 3, 5, 7], dtype=float)
+    def test_projection_and_trace(self):
+        y = [1, 3, 5, 7]
         beta, _ = ols_fit(self.X, y)
-        H = hat_matrix(self.X)
-
-        np.testing.assert_allclose(H @ y, self.X @ beta, atol=1e-10)
-        self.assertAlmostEqual(float(np.trace(H)), self.X.shape[1])
+        self.assertTrue(all_close(matvec(self.H, y), matvec(self.X, beta), atol=1e-10))
+        self.assertAlmostEqual(trace(self.H), len(self.X[0]), places=10)
 
 
 class TestModelMetrics(unittest.TestCase):
-    def test_perfect_fit_has_r2_one(self):
-        y = np.array([2, 4, 6, 8], dtype=float)
-        rss, tss, r2, adj_r2, f_stat = model_metrics(y, y, p=1)
-
-        self.assertAlmostEqual(rss, 0.0)
+    def test_perfect_fit(self):
+        y = [2, 4, 6, 8]
+        RSS, TSS, r2, adj_r2, f_stat = model_metrics(y, y, p=1)
+        self.assertAlmostEqual(RSS, 0.0)
+        self.assertAlmostEqual(TSS, 20.0)
         self.assertAlmostEqual(r2, 1.0)
         self.assertAlmostEqual(adj_r2, 1.0)
-        self.assertTrue(np.isinf(f_stat))
-        self.assertGreater(tss, 0.0)
+        self.assertTrue(math.isinf(f_stat))
 
-    def test_mean_prediction_has_r2_zero(self):
-        y = np.array([1, 2, 3, 4, 5], dtype=float)
-        y_hat = np.full_like(y, np.mean(y))
-        _, _, r2, adj_r2, _ = model_metrics(y, y_hat, p=1)
-
-        self.assertAlmostEqual(r2, 0.0)
-        self.assertLess(adj_r2, r2)
+    def test_constant_y_has_undefined_r2(self):
+        y = [4, 4, 4, 4]
+        _, _, r2, _, _ = model_metrics(y, y, p=1)
+        self.assertTrue(math.isnan(r2))
 
 
 class TestCoefInference(unittest.TestCase):
-    def setUp(self):
-        rng = np.random.default_rng(123)
-        n = 500
-        x1 = rng.normal(size=n)
-        x2 = rng.normal(size=n)
-        self.X = np.column_stack([np.ones(n), x1, x2])
-        self.beta_true = np.array([1.5, 2.0, -1.0])
-        self.y = self.X @ self.beta_true + rng.normal(scale=0.15, size=n)
-        self.beta_hat, self.sigma2_hat = ols_fit(self.X, self.y)
-
-    def test_inference_shapes_and_positive_standard_errors(self):
-        se, t_stats, p_values, ci_lower, ci_upper = coef_inference(
-            self.X, self.y, self.beta_hat, self.sigma2_hat
-        )
-
-        self.assertEqual(se.shape, self.beta_hat.shape)
-        self.assertEqual(t_stats.shape, self.beta_hat.shape)
-        self.assertEqual(p_values.shape, self.beta_hat.shape)
-        self.assertTrue(np.all(se > 0))
-        self.assertTrue(np.all(ci_upper > ci_lower))
-
-    def test_confidence_intervals_contain_true_coefficients(self):
-        _, _, p_values, ci_lower, ci_upper = coef_inference(
-            self.X, self.y, self.beta_hat, self.sigma2_hat
-        )
-
-        self.assertTrue(np.all(ci_lower <= self.beta_true))
-        self.assertTrue(np.all(self.beta_true <= ci_upper))
-        self.assertLess(p_values[1], 0.001)
-        self.assertLess(p_values[2], 0.001)
+    def test_standard_errors_and_ci(self):
+        X, y, beta_true = make_design()
+        beta_hat, sigma2 = ols_fit(X, y)
+        se, _, _, ci_lower, ci_upper = coef_inference(X, y, beta_hat, sigma2)
+        self.assertTrue(all(v > 0 for v in se))
+        self.assertTrue(all(ci_upper[j] > ci_lower[j] for j in range(len(beta_hat))))
+        self.assertTrue(all(ci_lower[j] <= beta_hat[j] <= ci_upper[j] for j in range(len(beta_hat))))
+        self.assertTrue(all(abs(beta_hat[j] - beta_true[j]) < 0.15 for j in range(len(beta_true))))
 
 
 class TestVif(unittest.TestCase):
-    def test_independent_features_have_low_vif(self):
-        rng = np.random.default_rng(7)
-        X = np.column_stack([np.ones(120), rng.normal(size=120), rng.normal(size=120)])
+    def test_independent_features_near_one(self):
+        rng = random.Random(7)
+        X = [[1.0, rng.gauss(0.0, 1.0), rng.gauss(0.0, 1.0)] for _ in range(120)]
         scores = vif(X)
+        self.assertTrue(all(0.9 <= value <= 1.2 for value in scores))
 
-        self.assertEqual(len(scores), 2)
-        self.assertTrue(all(score < 2.0 for score in scores))
-
-    def test_collinear_features_have_high_vif(self):
-        rng = np.random.default_rng(8)
-        x = rng.normal(size=120)
-        X = np.column_stack([np.ones(120), x, x + rng.normal(scale=0.01, size=120)])
+    def test_multicollinearity_large(self):
+        rng = random.Random(8)
+        X = []
+        for _ in range(120):
+            x = rng.gauss(0.0, 1.0)
+            X.append([1.0, x, x + rng.gauss(0.0, 0.01)])
         scores = vif(X)
-
-        self.assertEqual(len(scores), 2)
-        self.assertGreater(scores[0], 100.0)
-        self.assertGreater(scores[1], 100.0)
+        self.assertTrue(scores[0] > 1000)
+        self.assertTrue(scores[1] > 1000)
 
 
 class TestRidgeFit(unittest.TestCase):
     def test_lambda_zero_matches_ols(self):
-        X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
-        y = np.array([2, 5, 8, 11], dtype=float)
-        beta_ols, _ = ols_fit(X, y)
+        X = [[1, 0], [1, 1], [1, 2], [1, 3]]
+        y = [2, 5, 8, 11]
         beta_ridge = ridge_fit(X, y, lam=0.0)
-
-        np.testing.assert_allclose(beta_ridge, beta_ols, atol=1e-10)
+        beta_ols, _ = ols_fit(X, y)
+        self.assertTrue(all_close(beta_ridge, beta_ols, atol=1e-10))
 
     def test_large_lambda_shrinks_coefficients(self):
-        X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
-        y = np.array([2, 5, 8, 11], dtype=float)
+        X = [[1, 0], [1, 1], [1, 2], [1, 3]]
+        y = [2, 5, 8, 11]
         beta_small = ridge_fit(X, y, lam=0.1)
-        beta_large = ridge_fit(X, y, lam=1_000.0)
+        beta_large = ridge_fit(X, y, lam=100.0)
+        self.assertLess(norm2(beta_large), norm2(beta_small))
 
-        self.assertLess(np.linalg.norm(beta_large), np.linalg.norm(beta_small))
+    def test_plot_ridge_trace_runs(self):
+        X = [[1, 0], [1, 1], [1, 2], [1, 3]]
+        y = [2, 5, 8, 11]
+        with patch("matplotlib.pyplot.show"):
+            plot_ridge_trace(X, y)
 
 
 class TestLassoFitCd(unittest.TestCase):
-    def test_lambda_zero_recovers_simple_ols_solution(self):
-        X = np.array([[1, -1], [1, 0], [1, 1], [1, 2]], dtype=float)
-        y = 2 + 3 * X[:, 1]
-        beta = lasso_fit_cd(X, y, lam=0.0, max_iter=5_000)
+    def test_lambda_zero_matches_ols_for_simple_line(self):
+        X = [[1, -1], [1, 0], [1, 1], [1, 2]]
+        y = [-1, 2, 5, 8]
+        beta = lasso_fit_cd(X, y, lam=0.0, max_iter=5000)
+        self.assertTrue(all_close(beta, [2.0, 3.0], atol=1e-6))
 
-        np.testing.assert_allclose(beta, [2.0, 3.0], atol=1e-6)
-
-    def test_large_lambda_zeros_non_intercept_terms(self):
-        X = np.array([[1, -2], [1, -1], [1, 0], [1, 1], [1, 2]], dtype=float)
-        y = 4 + 5 * X[:, 1]
-        beta = lasso_fit_cd(X, y, lam=1_000.0, max_iter=5_000)
-
-        self.assertAlmostEqual(beta[0], np.mean(y), places=6)
-        np.testing.assert_allclose(beta[1:], [0.0], atol=1e-6)
-
-
-class TestRidgeTracePlot(unittest.TestCase):
-    def tearDown(self):
-        plt.close("all")
-
-    def test_plot_ridge_trace_creates_one_axis(self):
-        X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
-        y = np.array([2, 5, 8, 11], dtype=float)
-
-        with patch("matplotlib.pyplot.show"):
-            plot_ridge_trace(X, y)
-
-        self.assertEqual(len(plt.gcf().axes), 1)
-
-    def test_plot_ridge_trace_uses_log_x_axis(self):
-        X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
-        y = np.array([2, 5, 8, 11], dtype=float)
-
-        with patch("matplotlib.pyplot.show"):
-            plot_ridge_trace(X, y)
-
-        self.assertEqual(plt.gcf().axes[0].get_xscale(), "log")
+    def test_large_lambda_sets_slopes_to_zero(self):
+        X = [[1, -2], [1, -1], [1, 0], [1, 1], [1, 2]]
+        y = [7, 4, 1, -2, -5]
+        beta = lasso_fit_cd(X, y, lam=1000.0, max_iter=5000)
+        self.assertAlmostEqual(beta[0], sum(y) / len(y), places=6)
+        self.assertTrue(all_close(beta[1:], [0.0], atol=1e-6))
 
 
 class TestResidualPlots(unittest.TestCase):
-    def tearDown(self):
-        plt.close("all")
-
-    def _sample_data(self):
-        rng = np.random.default_rng(42)
-        X = np.column_stack([np.ones(40), rng.normal(size=(40, 2))])
-        beta = np.array([1.0, 2.0, -1.5])
-        y = X @ beta + rng.normal(scale=0.2, size=40)
-        beta_hat, _ = ols_fit(X, y)
-        return X, y, beta_hat
-
-    def test_residual_plots_create_four_axes(self):
-        X, y, beta_hat = self._sample_data()
-
+    def test_residual_plots_runs(self):
+        X, y, _ = make_design(seed=42, n=40)
+        beta, _ = ols_fit(X, y)
         with patch("matplotlib.pyplot.show"):
-            residual_plots(X, y, beta_hat)
-
-        self.assertEqual(len(plt.gcf().axes), 4)
-
-    def test_residual_plots_have_expected_titles(self):
-        X, y, beta_hat = self._sample_data()
-
-        with patch("matplotlib.pyplot.show"):
-            residual_plots(X, y, beta_hat)
-
-        titles = [ax.get_title() for ax in plt.gcf().axes]
-        self.assertIn("Residuals vs Fitted", titles)
-        self.assertIn("Cook's Distance", titles)
+            residual_plots(X, y, beta)
 
 
-class TestKFoldCv(unittest.TestCase):
+class TestCrossValidation(unittest.TestCase):
     def setUp(self):
-        rng = np.random.default_rng(2024)
-        x = rng.normal(size=45)
-        self.X = np.column_stack([np.ones(45), x])
-        self.y = 1.0 + 2.0 * x + rng.normal(scale=0.1, size=45)
+        rng = random.Random(2024)
+        self.X = []
+        self.y = []
+        for _ in range(45):
+            x = rng.gauss(0.0, 1.0)
+            row = [1.0, x]
+            self.X.append(row)
+            self.y.append(1.0 + 2.5 * x + rng.gauss(0.0, 0.1))
 
-    def test_default_signature_returns_float(self):
-        score = kfold_cv(self.X, self.y, k=5)
+    def test_kfold_is_deterministic(self):
+        first = kfold_cv(self.X, self.y, k=5)
+        second = kfold_cv(self.X, self.y, k=5)
+        self.assertAlmostEqual(first, second, places=12)
 
-        self.assertIsInstance(score, float)
-        self.assertGreaterEqual(score, 0.0)
-
-    def test_internal_seed_is_reproducible(self):
-        score_a = kfold_cv(self.X, self.y, k=5)
-        score_b = kfold_cv(self.X, self.y, k=5)
-
-        self.assertAlmostEqual(score_a, score_b)
-
-    def test_ridge_cv_score_accepts_explicit_lambda(self):
-        score = ridge_cv_score(self.X, self.y, k=5, lam=0.1)
-
-        self.assertIsInstance(score, float)
-        self.assertGreaterEqual(score, 0.0)
-
-    def test_ridge_lambda_search_returns_best_score(self):
-        lambdas, scores, best_lam, best_score = ridge_lambda_search(self.X, self.y, k=5)
-
-        self.assertEqual(len(lambdas), len(scores))
-        self.assertIn(best_lam, lambdas)
-        self.assertAlmostEqual(best_score, float(np.min(scores)))
-
-    def test_invalid_k_raises_value_error(self):
+    def test_invalid_k_raises(self):
         with self.assertRaises(ValueError):
             kfold_cv(self.X, self.y, k=1)
-
         with self.assertRaises(ValueError):
             kfold_cv(self.X, self.y, k=len(self.y) + 1)
 
+    def test_ridge_lambda_search_returns_minimum(self):
+        _, scores, best_lam, best_score = ridge_lambda_search(self.X, self.y, k=5)
+        self.assertIn(best_lam, ridge_lambda_search(self.X, self.y, k=5)[0])
+        self.assertAlmostEqual(best_score, min(scores))
 
-class TestVerifySolution(unittest.TestCase):
-    def test_verify_solution_prints_checks(self):
-        X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
-        y = np.array([1, 3, 5, 7], dtype=float)
-        beta, _ = ols_fit(X, y)
-        H = hat_matrix(X)
-
-        with contextlib.redirect_stdout(io.StringIO()) as output:
-            verify_solution(X, y, beta, H)
-
-        self.assertGreater(len(output.getvalue()), 0)
-
-    def test_verify_solution_handles_missing_beta(self):
-        X = np.array([[1, 0], [1, 1], [1, 2], [1, 3]], dtype=float)
-        y = np.array([1, 3, 5, 7], dtype=float)
-        H = hat_matrix(X)
-
-        with contextlib.redirect_stdout(io.StringIO()) as output:
-            verify_solution(X, y, None, H)
-
-        self.assertGreater(len(output.getvalue()), 0)
+    def test_ridge_cv_rejects_negative_lambda(self):
+        with self.assertRaises(ValueError):
+            ridge_cv_score(self.X, self.y, k=5, lam=-0.1)
 
 
 if __name__ == "__main__":

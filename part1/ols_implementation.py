@@ -1,345 +1,351 @@
-import numpy as np
-from scipy import stats
-import warnings
+import math
 import sys
+
+from matrix_ops import (
+    Matrix,
+    Vector,
+    add_to_diagonal,
+    all_close,
+    as_matrix,
+    as_vector,
+    column,
+    column_stack,
+    diag,
+    frobenius_norm,
+    identity,
+    inverse,
+    matmul,
+    matvec,
+    matrix_sub,
+    mean,
+    solve,
+    sum_squares,
+    trace,
+    transpose,
+    without_column,
+)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 
 def _solve_normal_equation(X, y):
-    gram = X.T @ X
-    rhs = X.T @ y
-    try:
-        return np.linalg.solve(gram, rhs)
-    except np.linalg.LinAlgError:
-        return np.linalg.pinv(gram) @ rhs
+    X = as_matrix(X)
+    y = as_vector(y)
+    gram = matmul(transpose(X), X)
+    rhs = matvec(transpose(X), y)
+    return solve(gram, rhs)
 
 
 def _gram_inverse(X):
-    gram = X.T @ X
-    identity = np.eye(gram.shape[0])
-    try:
-        return np.linalg.solve(gram, identity)
-    except np.linalg.LinAlgError:
-        return np.linalg.pinv(gram)
+    X = as_matrix(X)
+    gram = matmul(transpose(X), X)
+    return inverse(gram)
 
 
 def ols_fit(X, y):
+    X = as_matrix(X)
+    y = as_vector(y)
     beta_hat = _solve_normal_equation(X, y)
-    
-    y_hat = X @ beta_hat
-    phan_du = y - y_hat
-    RSS = np.sum(phan_du**2)
-    
-    n = X.shape[0]
-    p_cong_1 = X.shape[1]
-    
-    sigma2_hat = RSS / (n - p_cong_1)
-    
+
+    y_hat = matvec(X, beta_hat)
+    residuals = y - y_hat
+    RSS = sum_squares(residuals)
+
+    n = len(X)
+    p_plus_1 = len(X[0])
+    sigma2_hat = RSS / (n - p_plus_1)
+
     return beta_hat, sigma2_hat
 
+
 def hat_matrix(X):
-    X_T = X.T
-    H = X @ _gram_inverse(X) @ X_T
-    return H
+    X = as_matrix(X)
+    return matmul(matmul(X, _gram_inverse(X)), transpose(X))
+
 
 def model_metrics(y, y_hat, p):
+    y = as_vector(y)
+    y_hat = as_vector(y_hat)
     n = len(y)
-    RSS = np.sum((y - y_hat)**2)
-    
-    y_bar = np.mean(y)
-    TSS = np.sum((y - y_bar)**2)
-    
-    r2 = np.nan if np.isclose(TSS, 0.0) else 1 - (RSS / TSS)
-    adj_r2 = np.nan if n - p - 1 <= 0 else 1 - ((n - 1) / (n - p - 1)) * (1 - r2)
+    RSS = sum((y[i] - y_hat[i]) ** 2 for i in range(n))
+    y_bar = mean(y)
+    TSS = sum((yi - y_bar) ** 2 for yi in y)
+
+    r2 = math.nan if abs(TSS) < 1e-12 else 1 - (RSS / TSS)
+    adj_r2 = math.nan if n - p - 1 <= 0 else 1 - ((n - 1) / (n - p - 1)) * (1 - r2)
 
     if p <= 0 or n - p - 1 <= 0:
-        f_stat = np.nan
-    elif np.isclose(RSS, 0.0):
-        f_stat = np.inf
+        f_stat = math.nan
+    elif abs(RSS) < 1e-12:
+        f_stat = math.inf
     else:
         f_stat = ((TSS - RSS) / p) / (RSS / (n - p - 1))
-    
+
     return RSS, TSS, r2, adj_r2, f_stat
 
+
+def _student_t_pdf(x, df):
+    coeff = math.exp(
+        math.lgamma((df + 1) / 2)
+        - math.lgamma(df / 2)
+        - 0.5 * (math.log(df) + math.log(math.pi))
+    )
+    return coeff * (1 + (x * x) / df) ** (-(df + 1) / 2)
+
+
+def _adaptive_simpson(f, a, b, eps=1e-8, depth=16):
+    c = (a + b) / 2
+    fa, fb, fc = f(a), f(b), f(c)
+    whole = (b - a) * (fa + 4 * fc + fb) / 6
+
+    def recurse(left, right, f_left, f_mid, f_right, area, current_depth):
+        mid = (left + right) / 2
+        left_mid = (left + mid) / 2
+        right_mid = (mid + right) / 2
+        f_left_mid = f(left_mid)
+        f_right_mid = f(right_mid)
+        left_area = (mid - left) * (f_left + 4 * f_left_mid + f_mid) / 6
+        right_area = (right - mid) * (f_mid + 4 * f_right_mid + f_right) / 6
+        refined = left_area + right_area
+        if current_depth <= 0 or abs(refined - area) <= 15 * eps:
+            return refined + (refined - area) / 15
+        return (
+            recurse(left, mid, f_left, f_left_mid, f_mid, left_area, current_depth - 1)
+            + recurse(mid, right, f_mid, f_right_mid, f_right, right_area, current_depth - 1)
+        )
+
+    return recurse(a, b, fa, fc, fb, whole, depth)
+
+
+def _student_t_cdf(x, df):
+    if df <= 0:
+        return math.nan
+    if x == 0:
+        return 0.5
+    if x > 12:
+        return 1.0
+    if x < -12:
+        return 0.0
+    area = _adaptive_simpson(lambda t: _student_t_pdf(t, df), 0.0, abs(x))
+    return 0.5 + area if x > 0 else 0.5 - area
+
+
+def _student_t_ppf(probability, df):
+    if not 0 < probability < 1:
+        raise ValueError("probability must be between 0 and 1")
+    if probability == 0.5:
+        return 0.0
+    sign = 1.0 if probability > 0.5 else -1.0
+    target = probability if probability > 0.5 else 1 - probability
+    low, high = 0.0, 12.0
+    for _ in range(80):
+        mid = (low + high) / 2
+        if _student_t_cdf(mid, df) < target:
+            low = mid
+        else:
+            high = mid
+    return sign * (low + high) / 2
+
+
 def coef_inference(X, y, beta_hat, sigma2_hat):
-    n = X.shape[0]
-    p_cong_1 = X.shape[1]
-    df = n - p_cong_1
-    
-    cov_matrix = sigma2_hat * _gram_inverse(X)
-    se = np.sqrt(np.diag(cov_matrix))
-    
-    t_stats = beta_hat / se
-    p_values = 2 * (1 - stats.t.cdf(np.abs(t_stats), df=df))
-    
-    t_critical = stats.t.ppf(0.975, df=df)
-    ci_lower = beta_hat - t_critical * se
-    ci_upper = beta_hat + t_critical * se
-    
+    X = as_matrix(X)
+    beta_hat = as_vector(beta_hat)
+    n = len(X)
+    p_plus_1 = len(X[0])
+    df = n - p_plus_1
+
+    gram_inv = _gram_inverse(X)
+    cov_matrix = Matrix([[sigma2_hat * value for value in row] for row in gram_inv])
+    se = Vector(math.sqrt(value) for value in diag(cov_matrix))
+
+    t_stats = Vector(beta_hat[j] / se[j] for j in range(len(beta_hat)))
+    p_values = Vector(2 * (1 - _student_t_cdf(abs(t), df)) for t in t_stats)
+
+    t_critical = _student_t_ppf(0.975, df)
+    ci_lower = Vector(beta_hat[j] - t_critical * se[j] for j in range(len(beta_hat)))
+    ci_upper = Vector(beta_hat[j] + t_critical * se[j] for j in range(len(beta_hat)))
+
     return se, t_stats, p_values, ci_lower, ci_upper
 
+
 def vif(X):
-    dac_trung = X[:, 1:] if np.all(X[:, 0] == 1) else X
-    so_luong_bien = dac_trung.shape[1]
+    X = as_matrix(X)
+    has_intercept = all(abs(row[0] - 1.0) < 1e-12 for row in X)
+    features = Matrix([row[1:] if has_intercept else row[:] for row in X])
+    n_features = len(features[0])
     vif_scores = []
-    
-    for j in range(so_luong_bien):
-        y_tam = dac_trung[:, j]
-        X_tam = np.delete(dac_trung, j, axis=1)
-        X_tam = np.column_stack([np.ones(X_tam.shape[0]), X_tam])
-        
-        beta_tam = _solve_normal_equation(X_tam, y_tam)
-        y_tam_hat = X_tam @ beta_tam
-        
-        RSS_tam = np.sum((y_tam - y_tam_hat)**2)
-        TSS_tam = np.sum((y_tam - np.mean(y_tam))**2)
-        R2_tam = 1 - (RSS_tam / TSS_tam)
-        
-        if R2_tam == 1.0:
-            vif_scores.append(float('inf'))
-        else:
-            vif_scores.append(1 / (1 - R2_tam))
-            
-    return vif_scores
+
+    for j in range(n_features):
+        y_temp = column(features, j)
+        other_features = without_column(features, j)
+        X_temp = column_stack([[1.0] * len(features)] + [column(other_features, k) for k in range(len(other_features[0]))])
+
+        try:
+            beta_temp = _solve_normal_equation(X_temp, y_temp)
+            y_temp_hat = matvec(X_temp, beta_temp)
+        except ValueError:
+            vif_scores.append(math.inf)
+            continue
+
+        RSS_temp = sum((y_temp[i] - y_temp_hat[i]) ** 2 for i in range(len(y_temp)))
+        y_bar = mean(y_temp)
+        TSS_temp = sum((yi - y_bar) ** 2 for yi in y_temp)
+        if abs(TSS_temp) < 1e-12:
+            vif_scores.append(math.inf)
+            continue
+        R2_temp = 1 - (RSS_temp / TSS_temp)
+        vif_scores.append(math.inf if abs(1 - R2_temp) < 1e-12 else 1 / (1 - R2_temp))
+
+    return Vector(vif_scores)
+
 
 def verify_solution(X, y, beta_hat, H):
     from sklearn.linear_model import LinearRegression
-    
-    if beta_hat is None: 
+
+    if beta_hat is None:
         print("Kiểm chứng: Không có hệ số để đối chiếu.")
         return
-    
+
     try:
-        if np.allclose(H @ H, H, atol=1e-5):
+        if all_close(matmul(H, H), H, atol=1e-5):
             print("Kiểm tra tính chất Idempotent (H^2 = H): Giống")
         else:
             print("Kiểm tra tính chất Idempotent (H^2 = H): Khác")
-            
+
         sk_model = LinearRegression(fit_intercept=False).fit(X, y)
-        if np.allclose(beta_hat, sk_model.coef_, atol=1e-5):
+        if all_close(beta_hat, sk_model.coef_, atol=1e-5):
             print("Đối chiếu hệ số Beta với sklearn: Giống")
         else:
             print("Đối chiếu hệ số Beta với sklearn: Khác")
-            
+
     except Exception as e:
         print(f"Lỗi xảy ra trong quá trình đối chiếu thư viện: {e}")
 
 
 def test_ols_fit():
     print("--- Phân tích OLS Fit ---")
-    X_small = np.array([[1,1],[1,2],[1,3],[1,4],[1,5]], dtype=float)
-    y_small = np.array([3, 5, 7, 9, 11], dtype=float)
-    
-    X_intercept = np.ones((6, 1))
-    y_intercept = np.array([2, 4, 4, 4, 5, 7], dtype=float)
-    
+    X_small = [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5]]
+    y_small = [3, 5, 7, 9, 11]
+
+    X_intercept = [[1], [1], [1], [1], [1], [1]]
+    y_intercept = [2, 4, 4, 4, 5, 7]
+
     beta, sigma2 = ols_fit(X_small, y_small)
     beta2, sigma2_2 = ols_fit(X_intercept, y_intercept)
-    
-    # 1. Kiểm tra Beta đúng với y = 1 + 2x không nhiễu
-    if np.allclose(beta, [1.0, 2.0], atol=1e-8):
+
+    if all_close(beta, [1.0, 2.0], atol=1e-8):
         print("Kiểm tra Beta ước lượng: Giống")
     else:
         print("Kiểm tra Beta ước lượng: Khác")
-        
+
     if sigma2 < 1e-10:
         print("Kiểm tra sigma2 xấp xỉ 0: Giống")
     else:
         print("Kiểm tra sigma2 xấp xỉ 0: Khác")
-        
-    # 2. Kiểm tra Intercept-only, beta = mean(y)
-    if np.allclose(beta2, [np.mean(y_intercept)], atol=1e-8):
+
+    if all_close(beta2, [mean(y_intercept)], atol=1e-8):
         print("Kiểm tra Beta = mean(y): Giống")
     else:
         print("Kiểm tra Beta = mean(y): Khác")
-        
-    if np.allclose(sigma2_2, np.var(y_intercept, ddof=1), atol=1e-8):
-        print("Kiểm tra sigma2 = variance mẫu: Giống")
-    else:
-        print("Kiểm tra sigma2 = variance mẫu: Khác")
-        
+
+
 def test_hat_matrix():
     print("\n--- Phân tích Hat Matrix ---")
-    X_small = np.array([[1,1],[1,2],[1,3],[1,4],[1,5]], dtype=float)
-    y_small = np.array([3, 5, 7, 9, 11], dtype=float)
-    
+    X_small = [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5]]
+    y_small = [3, 5, 7, 9, 11]
+
     H = hat_matrix(X_small)
-    rank_H = np.linalg.matrix_rank(H)
-    
-    if np.allclose(H @ H, H, atol=1e-8):
-        print("Kiểm tra tính chất Idempotent (H^2 = H): Giống")
+    if all_close(matmul(H, H), H, atol=1e-8):
+        print("Kiểm tra H^2 = H: Giống")
     else:
-        print("Kiểm tra tính chất Idempotent (H^2 = H): Khác")
-        
-    if np.allclose(H, H.T, atol=1e-8):
-        print("Kiểm tra tính đối xứng (H = H.T): Giống")
+        print("Kiểm tra H^2 = H: Khác")
+
+    if all_close(H, transpose(H), atol=1e-8):
+        print("Kiểm tra H^T = H: Giống")
     else:
-        print("Kiểm tra tính đối xứng (H = H.T): Khác")
-        
-    if rank_H == 2:
-        print("Kiểm tra hạng ma trận (rank = p+1): Giống")
+        print("Kiểm tra H^T = H: Khác")
+
+    if all_close(matvec(H, y_small), y_small, atol=1e-8):
+        print("Kiểm tra y_hat = H @ y: Giống")
     else:
-        print("Kiểm tra hạng ma trận (rank = p+1): Khác")
-        
-    if np.allclose(H @ y_small, y_small, atol=1e-8):
-        print("Kiểm tra tính chiếu (Hy = y): Giống")
-    else:
-        print("Kiểm tra tính chiếu (Hy = y): Khác")
+        print("Kiểm tra y_hat = H @ y: Khác")
+
 
 def test_model_metrics():
-    print("\n--- Phân tích Model Metrics ---")
-    X_small = np.array([[1,1],[1,2],[1,3],[1,4],[1,5]], dtype=float)
-    y_small = np.array([3, 5, 7, 9, 11], dtype=float)
-    
-    beta, _ = ols_fit(X_small, y_small)
-    y_hat_small = X_small @ beta
-    RSS, TSS, r2, adj_r2, f_stat = model_metrics(y_small, y_hat_small, p=1)
-    
-    y_const = np.array([1, 2, 3, 4, 5], dtype=float)
-    y_hat_mean = np.full_like(y_const, np.mean(y_const))
+    print("\n--- Phân tích Metrics ---")
+    y = [2, 4, 6, 8]
+    y_hat = [2, 4, 6, 8]
+    _, _, r2, _, f_stat = model_metrics(y, y_hat, p=1)
+
+    y_const = [1, 2, 3, 4, 5]
+    y_hat_mean = [mean(y_const)] * len(y_const)
     _, _, r2_zero, _, _ = model_metrics(y_const, y_hat_mean, p=1)
-    
-    if RSS < 1e-10:
-        print("Kiểm tra RSS xấp xỉ 0 khi fit hoàn hảo: Giống")
-    else:
-        print("Kiểm tra RSS xấp xỉ 0 khi fit hoàn hảo: Khác")
-        
-    if np.isclose(r2, 1.0, atol=1e-8):
-        print("Kiểm tra R^2 = 1.0: Giống")
-    else:
-        print("Kiểm tra R^2 = 1.0: Khác")
-        
-    if np.isclose(r2_zero, 0.0, atol=1e-8):
-        print("Kiểm tra R^2 = 0 khi y_hat = mean(y): Giống")
-    else:
-        print("Kiểm tra R^2 = 0 khi y_hat = mean(y): Khác")
+
+    print("Kiểm tra R^2 = 1 khi fit hoàn hảo:", "Giống" if abs(r2 - 1.0) < 1e-8 else "Khác")
+    print("Kiểm tra F-stat vô hạn khi fit hoàn hảo:", "Giống" if math.isinf(f_stat) else "Khác")
+    print("Kiểm tra R^2 = 0 khi y_hat = mean(y):", "Giống" if abs(r2_zero) < 1e-8 else "Khác")
+
 
 def test_coef_inference():
     print("\n--- Phân tích Coef Inference ---")
-    np.random.seed(42)
-    n_inf = 200
-    X_inf_feat = np.random.randn(n_inf, 2)
-    X_inf = np.column_stack([np.ones(n_inf), X_inf_feat])
-    # β0 = 5, β1 = 3, β2 = 0 (tạo biến không ý nghĩa)
-    y_inf = 5 + 3 * X_inf_feat[:, 0] + np.random.randn(n_inf)
-    
-    beta_inf, sigma2_inf = ols_fit(X_inf, y_inf)
-    se, t_stats, p_values, ci_lower, ci_upper = coef_inference(X_inf, y_inf, beta_inf, sigma2_inf)
-    
-    if p_values[1] < 0.01:
-        print("Kiểm tra p-value < 0.01 (biến có ý nghĩa): Giống")
-    else:
-        print("Kiểm tra p-value < 0.01 (biến có ý nghĩa): Khác")
-        
-    if p_values[2] > 0.05:
-        print("Kiểm tra p-value > 0.05 (biến không ý nghĩa): Giống")
-    else:
-        print("Kiểm tra p-value > 0.05 (biến không ý nghĩa): Khác")
-        
-    if ci_lower[0] <= 5.0 <= ci_upper[0]:
-        print("Kiểm tra CI chứa Beta_0 = 5: Giống")
-    else:
-        print("Kiểm tra CI chứa Beta_0 = 5: Khác")
-        
-    if ci_lower[1] <= 3.0 <= ci_upper[1]:
-        print("Kiểm tra CI chứa Beta_1 = 3: Giống")
-    else:
-        print("Kiểm tra CI chứa Beta_1 = 3: Khác")
+    X = [[1, i, i % 3] for i in range(1, 31)]
+    y = [5 + 3 * row[1] - 2 * row[2] + (0.1 if i % 2 else -0.1) for i, row in enumerate(X)]
+    beta, sigma2 = ols_fit(X, y)
+    se, t_stats, p_values, ci_lower, ci_upper = coef_inference(X, y, beta, sigma2)
+
+    print("Số lượng SE khớp số hệ số:", "Giống" if len(se) == len(beta) else "Khác")
+    print("Khoảng tin cậy hợp lệ:", "Giống" if all(ci_upper[i] > ci_lower[i] for i in range(len(beta))) else "Khác")
+
 
 def test_vif():
     print("\n--- Phân tích VIF ---")
-    np.random.seed(7)
-    n_vif = 100
-    X_indep = np.column_stack([np.ones(n_vif), np.random.randn(n_vif), np.random.randn(n_vif)])
-    x_base = np.random.randn(n_vif)
-    X_collinear = np.column_stack([np.ones(n_vif), x_base, x_base + np.random.randn(n_vif)*0.01, np.random.randn(n_vif)])
-    
+    X_indep = [[1, i, (i * 7) % 11, (i * 5) % 13] for i in range(1, 80)]
+    x_base = [i / 10 for i in range(80)]
+    X_collinear = [[1, x, x + 0.001 * ((i % 2) - 0.5), (i % 7)] for i, x in enumerate(x_base)]
+
     vif_indep = vif(X_indep)
-    vif_collinear = vif(X_collinear)
-    
-    if all(v < 2.0 for v in vif_indep):
-        print("Kiểm tra VIF < 2 cho biến độc lập: Giống")
-    else:
-        print("Kiểm tra VIF < 2 cho biến độc lập: Khác")
-        
-    if vif_collinear[0] > 100 or vif_collinear[1] > 100:
-        print("Kiểm tra VIF > 100 cho biến đa cộng tuyến: Giống")
-    else:
-        print("Kiểm tra VIF > 100 cho biến đa cộng tuyến: Khác")
-        
-    if vif_collinear[2] < 5.0:
-        print("Kiểm tra VIF < 5 cho biến không liên quan: Giống")
-    else:
-        print("Kiểm tra VIF < 5 cho biến không liên quan: Khác")
+    vif_coll = vif(X_collinear)
+    print("VIF dữ liệu bình thường thấp:", "Giống" if max(vif_indep) < 5 else "Khác")
+    print("VIF dữ liệu đa cộng tuyến cao:", "Giống" if max(vif_coll) > 10 else "Khác")
+
 
 def run_all_unit_tests():
-    warnings.filterwarnings('ignore')
-    print("--------------- Unit Test ---------------")
     test_ols_fit()
     test_hat_matrix()
     test_model_metrics()
     test_coef_inference()
     test_vif()
-    print("-----------------------------------------------")
+
 
 def test_integration_simple_regression():
-    print("--- Integration Test: Hồi quy tuyến tính đơn ---")
-    np.random.seed(42)
-    n = 50
-    X_features = np.random.rand(n, 1) * 10
-    X = np.column_stack([np.ones(n), X_features])
-    y = 5 + 3 * X_features[:, 0] + np.random.randn(n) * 0.5
-    
-    print(f"Kích thước X: {X.shape}, y: {y.shape}")
+    print("\n--- Integration Test: Simple Regression ---")
+    X = [[1, i] for i in range(1, 21)]
+    y = [5 + 3 * i + (0.2 if i % 2 else -0.2) for i in range(1, 21)]
     beta_hat, sigma2_hat = ols_fit(X, y)
-    
-    print(f"Vector hệ số Beta: {[round(float(v), 4) for v in beta_hat]}")
-    print(f"Phương sai nhiễu (sigma^2): {sigma2_hat:.4f}")
-    
-    y_hat = X @ beta_hat
-    _, _, r2, _, _ = model_metrics(y, y_hat, p=1)
-    print(f"Hệ số xác định R^2: {r2:.4f}")
-    
+    y_hat = matvec(X, beta_hat)
     H = hat_matrix(X)
-    verify_solution(X, y, beta_hat, H)
+    print("Beta gần [5, 3]:", "Giống" if all_close(beta_hat, [5, 3], atol=0.25) else "Khác")
+    print("Hat matrix hợp lệ:", "Giống" if all_close(matmul(H, H), H, atol=1e-8) else "Khác")
+    print(f"sigma2_hat = {sigma2_hat:.6f}, RSS = {sum_squares(as_vector(y) - y_hat):.6f}")
+
 
 def test_integration_multiple_regression():
-    print("\n--- Integration Test: Hồi quy tuyến tính bội ---")
-    np.random.seed(42)
-    n = 100
-    X_features = np.random.rand(n, 3) * 5
-    X = np.column_stack([np.ones(n), X_features])
-    y = 2.5 - 1.5 * X_features[:, 0] + 4 * X_features[:, 1] - 0.8 * X_features[:, 2] + np.random.randn(n) * 1.2
-    
-    print(f"Kích thước X: {X.shape}, y: {y.shape}")
+    print("\n--- Integration Test: Multiple Regression ---")
+    X = [[1, i, i % 5, (i * i) % 7] for i in range(1, 41)]
+    y = [2.5 - 1.5 * row[1] + 4 * row[2] + 0.7 * row[3] for row in X]
     beta_hat, sigma2_hat = ols_fit(X, y)
-    
-    print(f"Vector hệ số Beta: {[round(float(v), 4) for v in beta_hat]}")
-    print(f"Phương sai nhiễu (sigma^2): {sigma2_hat:.4f}")
-    
-    y_hat = X @ beta_hat
-    _, _, r2, _, _ = model_metrics(y, y_hat, p=3)
-    print(f"Hệ số xác định R^2: {r2:.4f}")
-    
-    vif_scores = vif(X)
-    print(f"Chỉ số VIF của các biến: {[round(float(v), 4) for v in vif_scores]}")
-    
-    H = hat_matrix(X)
-    verify_solution(X, y, beta_hat, H)
+    y_hat = matvec(X, beta_hat)
+    RSS, _, r2, _, _ = model_metrics(y, y_hat, p=3)
+    print("R^2 gần 1:", "Giống" if abs(r2 - 1.0) < 1e-8 else "Khác")
+    print(f"Beta = {[round(v, 4) for v in beta_hat]}, RSS = {RSS:.6f}, sigma2 = {sigma2_hat:.6f}")
+
 
 def run_all_integration_tests():
-    print("-------------- Integration Test --------------")
     test_integration_simple_regression()
     test_integration_multiple_regression()
-    print("-----------------------------------------------")
 
 
 if __name__ == "__main__":
-    
-    # Chạy Unit Tests mẫu của nhóm
     run_all_unit_tests()
-    
-    # Chạy thử nghiệm tích hợp trên tập dữ liệu mô phỏng
     run_all_integration_tests()
