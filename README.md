@@ -1,174 +1,139 @@
-# Project 2 - Data Fitting va Ordinary Least Squares
+# Đồ án 2: Data Fitting và Phương pháp OLS
 
-Repository nay la phan code cho Do an 2 mon **Toan Ung Dung va Thong Ke (MTH00051)**, tap trung vao Data Fitting, Ordinary Least Squares (OLS), cac mo hinh chinh quy hoa va ung dung tren du lieu thuc te.
+**Môn học:** Toán Ứng Dụng và Thống Kê (MTH00051)  
+**Trường:** Đại học Khoa học Tự nhiên, ĐHQG-HCM (FIT-HCMUS)  
+**Nhóm:** 02
 
-## Thong tin nhom
+**Nhóm sinh viên thực hiện:**
 
-**Nhom:** 02
+| STT | MSSV | Họ và Tên | Phân công chính |
+|:---:|:---:|:---|:---|
+| 1 | 24120151 | Phạm Minh Trọng | Code Part 2, Dataset và EDA |
+| 2 | 24120033 | Đào Tiến Đạt | Ridge, Lasso, Cross-Validation |
+| 3 | 24120167 | Bùi Nhật Bảo | Code Part 2, Tiền xử lý và mô hình |
+| 4 | 24120199 | Trịnh Kim Mai | OLS, Hat Matrix, lý thuyết OLS |
+| 5 | 24120221 | Trần Công Quang | Residual Analysis, Notebook, kết quả và báo cáo |
 
-| STT | Ho va ten | MSSV | Phan cong chinh |
-|---:|---|---|---|
-| 1 | Dao Tien Dat | 24120033 | `ridge_lasso.py`, `cross_validation.py`, ly thuyet Ridge, Lasso va Cross-Validation |
-| 2 | Pham Minh Trong | 24120151 | Code Part 2, dataset va EDA |
-| 3 | Bui Nhat Bao | 24120167 | Code Part 2, tien xu ly du lieu va mo hinh |
-| 4 | Trinh Kim Mai | 24120199 | `ols_implementation.py`, ly thuyet OLS va Hat Matrix |
-| 5 | Tran Cong Quang | 24120221 | `residual_analysis.py`, notebook Part 1/Part 2, ket qua va bao cao |
+---
 
-## Muc tieu do an
+## 📝 Giới thiệu Đồ án
 
-Do an gom hai phan chinh:
+Đồ án tập trung vào việc tìm hiểu, tự cài đặt và minh họa các nội dung quan trọng trong **Data Fitting** và **Ordinary Least Squares (OLS)**. Nhóm không chỉ chạy ra kết quả, mà còn cố gắng giải thích công thức, kiểm chứng thuật toán và phân tích ý nghĩa của từng kết quả.
 
-1. **Part 1 - Ly thuyet va minh hoa Data Fitting/OLS**
-   - Cai dat OLS tu dau.
-   - Kiem tra Hat Matrix va cac tinh chat dai so.
-   - Tinh cac chi so danh gia mo hinh: RSS, TSS, R-squared, adjusted R-squared, F-statistic.
-   - Suy dien he so hoi quy: standard error, t-statistic, p-value, confidence interval.
-   - Phat hien da cong tuyen bang VIF.
-   - Cai dat Ridge Regression, Lasso Regression bang Coordinate Descent.
-   - Cai dat K-Fold Cross-Validation.
-   - Phan tich phan du va minh hoa dinh ly Gauss-Markov bang Monte Carlo.
+Dự án gồm 2 phần chính:
 
-2. **Part 2 - Ung dung tren du lieu thuc te**
-   - Su dung bo du lieu chat luong khong khi `city_day.csv`.
-   - Xay dung pipeline tien xu ly du lieu.
-   - Xu ly missing values, feature engineering, scaling va encoding.
-   - Thu nghiem cac mo hinh hoi quy va so sanh ket qua.
-   - Trinh bay ket qua bang notebook va hinh truc quan.
+1. **Phần 1:** Trình bày lý thuyết và tự cài đặt các thuật toán liên quan đến OLS, Hat Matrix, VIF, Ridge, Lasso, Cross-Validation, Residual Analysis và mô phỏng Gauss-Markov.
+2. **Phần 2:** Ứng dụng Data Fitting trên bộ dữ liệu thực tế về chất lượng không khí, bao gồm tiền xử lý dữ liệu, xây dựng mô hình và so sánh kết quả.
 
-## Luu y quan trong ve yeu cau thu vien
+---
 
-Theo yeu cau cua de bai va phan nhac lai cua giang vien:
+## ⚠️ Lưu ý quan trọng về thư viện
 
-> NumPy/SciPy chi duoc dung cho tinh toan ho tro, truc quan hoa, kiem chung hoac phan tich du lieu khi phu hop; khong duoc dung de thay the phan cai dat thuat toan chinh trong Part 1.
+Theo yêu cầu của đề bài và giảng viên, trong **Phần 1**, nhóm không dùng `NumPy`, `SciPy`, `np.array`, `np.linalg` hay `numpy.linalg.lstsq` để thay thế phần cài đặt thuật toán chính.
 
-Vi vay, trong **Part 1**, cac thuat toan chinh khong goi `numpy`, `scipy`, `np.array`, `np.linalg` hay `numpy.linalg.lstsq`. Nhom tach cac phep toan nen tang vao file `matrix_ops.py` de dung chung.
+Để làm được điều đó, nhóm tạo file:
 
-### Vai tro cua `matrix_ops.py`
+```text
+part1/matrix_ops.py
+```
 
-`part1/matrix_ops.py` la module tu cai dat cac phep toan ma tran/vector co ban bang Python thuan:
+File này chứa các phép toán ma trận/vector tự cài bằng Python thuần như nhân ma trận, chuyển vị, giải hệ tuyến tính, nghịch đảo, trace, diag, logspace,... Đây là phần hỗ trợ nội bộ của nhóm, không phải thư viện ngoài.
 
-- `Vector`, `Matrix`: lop danh sach mo rong de thao tac gan voi vector va ma tran.
-- `transpose`, `matmul`, `matvec`, `dot`: cac phep nhan va chuyen vi.
-- `solve`: giai he phuong trinh tuyen tinh bang khu Gauss-Jordan co pivot.
-- `inverse`: tinh nghich dao bang cach giai nhieu he tuyen tinh.
-- `diag`, `trace`, `identity`, `zeros`: cac ham tien ich cho dai so tuyen tinh.
-- `mean`, `variance`, `sum_squares`: cac phep thong ke co ban.
-- `take_rows`, `take_values`, `column_stack`, `logspace`: ho tro Cross-Validation va Ridge.
+Lý do tách riêng `matrix_ops.py`:
 
-Ly do tach file nay:
+- Tránh viết lặp lại cùng một đoạn xử lý ma trận trong nhiều file.
+- Giúp các file thuật toán như OLS, Ridge, Lasso, Cross-Validation dễ đọc hơn.
+- Dễ kiểm tra rằng phần cài đặt chính của Phần 1 không phụ thuộc NumPy/SciPy.
 
-- Tranh lap lai cung mot doan code ma tran trong nhieu file.
-- Giup cac file thuat toan nhu OLS, Ridge, Lasso, Cross-Validation ngan gon hon.
-- De kiem tra viec khong dung NumPy/SciPy trong phan cai dat chinh.
-- Neu can sua cach nhan ma tran, giai he tuyen tinh hoac kiem tra sai so, chi can sua mot noi.
+---
 
-Noi ngan gon: `matrix_ops.py` khong phai thu vien ngoai, ma la phan tu cai dat cua nhom de thay cho cac phep ma tran thuong duoc NumPy ho tro.
-
-## Cau truc thu muc
+## 📂 Sơ đồ Cấu trúc Thư mục
 
 ```text
 Project2_TUDTK/
-|-- README.md
-|-- requirements.txt
-|-- Toan UDTK_Project_2-Data Fitting va OLS.pdf
-|-- _Toan_UDTK_Project_2_extract.txt
-|-- part1/
-|   |-- matrix_ops.py
-|   |-- ols_implementation.py
-|   |-- ridge_lasso.py
-|   |-- cross_validation.py
-|   |-- residual_analysis.py
-|   |-- test_part1_unit.py
-|   |-- part1_notebook.ipynb
-|-- part2/
-|   |-- data/
-|   |   |-- city_day.csv
-|   |-- data_pipeline.py
-|   |-- advanced_methods.py
-|   |-- model_comparison.py
-|   |-- part2_notebook.ipynb
+├── part1/                         # Lý thuyết và minh họa OLS
+│   ├── matrix_ops.py              # Các phép toán ma trận/vector tự cài
+│   ├── ols_implementation.py      # OLS, Hat Matrix, Metrics, VIF
+│   ├── ridge_lasso.py             # Ridge Regression và Lasso
+│   ├── cross_validation.py        # K-Fold Cross-Validation
+│   ├── residual_analysis.py       # Phân tích phần dư
+│   ├── test_part1_unit.py         # Unit test cho Phần 1
+│   └── part1_notebook.ipynb       # Notebook trình bày Phần 1
+├── part2/                         # Ứng dụng trên dữ liệu thực tế
+│   ├── data/
+│   │   └── city_day.csv           # Bộ dữ liệu chất lượng không khí
+│   ├── data_pipeline.py           # Pipeline tiền xử lý dữ liệu
+│   ├── advanced_methods.py        # Các phương pháp/mô hình nâng cao
+│   ├── model_comparison.py        # So sánh mô hình và metric
+│   └── part2_notebook.ipynb       # Notebook trình bày Phần 2
+├── requirements.txt               # Danh sách thư viện cần cài
+├── Toan UDTK_Project_2-Data Fitting va OLS.pdf
+└── README.md
 ```
 
-## Mo ta file chinh
+---
 
-### Part 1
+## ⚙️ Hướng dẫn Cài đặt Môi trường
 
-| File | Vai tro |
-|---|---|
-| `matrix_ops.py` | Cac phep toan ma tran/vector tu cai dat, dung chung cho Part 1 |
-| `ols_implementation.py` | OLS, Hat Matrix, model metrics, suy dien he so, VIF |
-| `ridge_lasso.py` | Ridge Regression va Lasso Coordinate Descent |
-| `cross_validation.py` | K-Fold Cross-Validation va chon lambda cho Ridge |
-| `residual_analysis.py` | Residual plots, standardized residuals, Cook's Distance |
-| `test_part1_unit.py` | Unit test cho cac ham Part 1 |
-| `part1_notebook.ipynb` | Notebook trinh bay ly thuyet, minh hoa va ket qua Part 1 |
+### 1. Yêu cầu hệ thống
 
-### Part 2
+- **Python:** phiên bản 3.10 trở lên.
+- **Jupyter Notebook:** dùng để mở và chạy notebook.
+- **Các thư viện Python:** được liệt kê trong `requirements.txt`.
 
-| File | Vai tro |
-|---|---|
-| `data/city_day.csv` | Bo du lieu chat luong khong khi dung cho ung dung thuc te |
-| `data_pipeline.py` | Pipeline tien xu ly: imputation, scaling, feature engineering, encoding |
-| `advanced_methods.py` | Cac mo hinh/mo phong nang cao va diagnostic plots |
-| `model_comparison.py` | Ham huan luyen, du doan va so sanh metric |
-| `part2_notebook.ipynb` | Notebook trinh bay pipeline, mo hinh va ket qua Part 2 |
+### 2. Cài đặt thư viện
 
-## Cai dat moi truong
-
-Yeu cau Python 3.10+.
+Mở Terminal/PowerShell tại thư mục dự án và chạy:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Thu vien trong `requirements.txt` phuc vu cho ca hai phan cua do an:
+Các thư viện như `pandas`, `matplotlib`, `seaborn`, `scikit-learn`, `numpy`, `scipy` được dùng cho việc đọc dữ liệu, trực quan hóa, Part 2 hoặc kiểm chứng kết quả. Riêng thuật toán chính của **Part 1** được tự cài bằng Python thuần.
 
-- `matplotlib`, `seaborn`, `jupyter`: truc quan hoa va notebook.
-- `pandas`: doc va xu ly du lieu Part 2.
-- `scikit-learn`: doi chieu/kiem chung ket qua khi can.
-- `numpy`, `scipy`: ho tro tinh toan va cac thuc nghiem Part 2; khong thay the thuat toan chinh trong Part 1.
+---
 
-## Cach chay Part 1
+## 🚀 Hướng dẫn Chạy Code
 
-Chay unit test:
+### 1. Chạy Notebook Phần 1
+
+Notebook Phần 1 trình bày lý thuyết, gọi các hàm tự cài và minh họa bằng dữ liệu mô phỏng:
+
+```bash
+jupyter notebook part1/part1_notebook.ipynb
+```
+
+Trong notebook này, các kết quả chính gồm:
+
+- So sánh hệ số OLS tự cài với kết quả kiểm chứng.
+- Kiểm tra các tính chất của Hat Matrix.
+- Tính VIF để phát hiện đa cộng tuyến.
+- Minh họa Ridge, Lasso và chọn lambda bằng Cross-Validation.
+- Vẽ các biểu đồ phân tích phần dư.
+- Mô phỏng định lý Gauss-Markov bằng Monte Carlo.
+
+### 2. Chạy Unit Test Phần 1
+
+Để kiểm tra nhanh các hàm tự cài:
 
 ```bash
 cd part1
 python -m unittest test_part1_unit.py
 ```
 
-Chay tung file minh hoa:
+### 3. Chạy Notebook Phần 2
 
-```bash
-python ols_implementation.py
-python ridge_lasso.py
-python cross_validation.py
-python residual_analysis.py
-```
-
-Mo notebook:
-
-```bash
-jupyter notebook part1/part1_notebook.ipynb
-```
-
-## Cach chay Part 2
-
-Mo notebook Part 2:
+Notebook Phần 2 trình bày quá trình xử lý dữ liệu thực tế và so sánh mô hình:
 
 ```bash
 jupyter notebook part2/part2_notebook.ipynb
 ```
 
-Du lieu mac dinh nam tai:
+---
 
-```text
-part2/data/city_day.csv
-```
+## 🔎 Kiểm tra nhanh trước khi nộp
 
-## Kiem tra nhanh truoc khi nop
-
-Nhom co the dung cac lenh sau de kiem tra Part 1:
+Để kiểm tra các file Python ở Phần 1 có chạy được không:
 
 ```bash
 cd part1
@@ -176,25 +141,33 @@ python -m py_compile matrix_ops.py ols_implementation.py ridge_lasso.py cross_va
 python -m unittest test_part1_unit.py
 ```
 
-De kiem tra Part 1 khong con import NumPy/SciPy trong code:
+Để kiểm tra Phần 1 không còn gọi NumPy/SciPy trong code/notebook:
 
 ```powershell
 Select-String -Path ".\part1\*.py", ".\part1\part1_notebook.ipynb" -Pattern "import numpy|numpy|np\.|scipy|np\.array|np\.linalg|linalg"
 ```
 
-Neu lenh tren khong in ra ket qua, Part 1 khong con dau vet goi NumPy/SciPy trong phan code/notebook hien tai.
+Nếu lệnh trên không in ra kết quả, nghĩa là Phần 1 không còn dấu vết dùng NumPy/SciPy trong phần cài đặt hiện tại.
 
-## Ghi chu ve tinh tai lap
+---
 
-- Cac vi du mo phong dung seed co dinh de ket qua tai lap duoc.
-- Part 1 uu tien giai thich ro cong thuc va minh hoa bang du lieu mo phong.
-- Part 2 uu tien quy trinh ung dung thuc te: tien xu ly du lieu, huan luyen mo hinh, danh gia va so sanh.
-- Notebook va report co the dung hinh truc quan de giai thich ket qua, nhung phan thuat toan chinh cua Part 1 van duoc viet bang Python thuan.
+## 📊 Kết luận chính của Đồ án
 
-## Trang thai hien tai
+- **OLS:** Hệ số tự cài khớp với kết quả kiểm chứng và gần với hệ số thật trên dữ liệu mô phỏng.
+- **Hat Matrix:** Các tính chất như đối xứng, lũy đẳng và trace được kiểm tra đúng bằng thực nghiệm.
+- **VIF:** Khi tạo dữ liệu có đa cộng tuyến mạnh, VIF tăng rất lớn, cho thấy hệ số hồi quy có thể trở nên nhạy.
+- **Ridge và Lasso:** Ridge co nhỏ hệ số, còn Lasso có thể đưa một số hệ số về gần 0 để hỗ trợ chọn biến.
+- **Cross-Validation:** Giúp chọn lambda dựa trên lỗi kiểm chứng thay vì chọn thủ công.
+- **Residual Analysis:** Các biểu đồ phần dư giúp đánh giá giả thiết tuyến tính, phương sai và điểm ảnh hưởng lớn.
+- **Gauss-Markov:** Mô phỏng Monte Carlo cho thấy OLS có phương sai nhỏ hơn so với một ước lượng tuyến tính không chệch thay thế.
 
-- Part 1 da duoc chinh de khong dung NumPy/SciPy cho cac thuat toan chinh.
-- `matrix_ops.py` la module ho tro noi bo do nhom tu cai dat.
-- Unit test Part 1 da duoc chuyen sang Python thuan.
-- Notebook Part 1 da co ghi chu ve viec khong dung thu vien so de thay the thuat toan chinh.
+---
+
+## ✅ Trạng thái hiện tại
+
+- Phần 1 đã được chỉnh để thuật toán chính không dùng NumPy/SciPy.
+- `matrix_ops.py` đã được thêm để tự cài các phép toán ma trận cần thiết.
+- Unit test Phần 1 đã chạy ổn.
+- Notebook Phần 1 đã được cập nhật để giải thích rõ vai trò của phần tự cài.
+- README đã được viết lại để giáo viên dễ đọc và dễ kiểm tra cấu trúc dự án.
 
