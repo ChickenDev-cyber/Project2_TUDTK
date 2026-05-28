@@ -136,11 +136,11 @@ class KernelRidgeRegression:
         n_samples = len(self.X_train)
         K = self._compute_rbf_kernel(self.X_train, self.X_train)
         
-        # Optimize memory and speed: Add lambda directly to the diagonal of K
         for i in range(n_samples):
             K[i][i] += self.lam
         
-        alpha_arr = cg_solve(K, self.y_train)
+        # Early Stopping
+        alpha_arr = cg_solve(K, self.y_train, tol=1e-4, max_iter=50)
         self.alpha_coef = alpha_arr.tolist() if hasattr(alpha_arr, 'tolist') else alpha_arr
             
         return self
