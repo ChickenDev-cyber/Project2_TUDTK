@@ -1,5 +1,17 @@
+
 import numpy as np
-from scipy.spatial.distance import cdist # Chỉ dùng để tính khoảng cách hình học
+import sys
+import os
+part1_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'part1'))
+if part1_path not in sys.path:
+    sys.path.append(part1_path)
+
+from matrix_ops import (
+    inverse, solve, cg_solve, transpose, matmul, identity, matrix_add, as_matrix, as_vector
+)
+import math
+import operator
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as stats
@@ -13,32 +25,66 @@ class BayesianLinearRegression:
         self.S_N = None
 
     def fit(self, X, y):
-        X_mat = X.values if hasattr(X, 'values') else X
-        y_vec = y.values.flatten() if hasattr(y, 'values') else y.flatten()
+        # Chuyển sang list 
+        X_mat = X.values.tolist() if hasattr(X, 'values') else X.tolist()
         
-        X_design = np.c_[np.ones((X_mat.shape[0], 1)), X_mat]
-        N, M = X_design.shape
+        if hasattr(y, 'values'):
+            y_vec = y.values.flatten().tolist()
+        else:
+            if hasattr(y, 'flatten'):
+                y_vec = y.flatten().tolist()
+            else:
+                y_vec = list(y)
         
-        S_0_inv = self.alpha * np.eye(M)
-        self.S_N = np.linalg.inv(S_0_inv + self.beta * (X_design.T @ X_design))
-        self.m_N = self.beta * (self.S_N @ (X_design.T @ y_vec))
+        X_design = [[1.0] + list(row) for row in X_mat]
+        N = len(X_design)
+        M = len(X_design[0])
+        
+        S_0_inv = identity(M)
+        S_0_inv = [[self.alpha * val for val in row] for row in S_0_inv]
+        
+        X_T = transpose(X_design)
+        XtX = matmul(X_T, X_design)
+        
+        beta_XtX = [[self.beta * val for val in row] for row in XtX]
+        
+        S_N_array = inverse(matrix_add(S_0_inv, beta_XtX))
+        self.S_N = S_N_array.tolist() if hasattr(S_N_array, 'tolist') else S_N_array
+        
+        X_T_y = matmul(X_T, as_matrix([[v] for v in y_vec]))
+        S_N_X_T_y = matmul(self.S_N, X_T_y)
+        if hasattr(S_N_X_T_y, 'tolist'):
+            S_N_X_T_y = S_N_X_T_y.tolist()
+        
+        self.m_N = [self.beta * row[0] for row in S_N_X_T_y]
+            
         return self
 
     def get_credible_interval(self, X):
-        X_mat = X.values if hasattr(X, 'values') else X
-        X_design = np.c_[np.ones((X_mat.shape[0], 1)), X_mat]
+        X_mat = X.values.tolist() if hasattr(X, 'values') else X.tolist()
+        X_design = [[1.0] + list(row) for row in X_mat]
         
-        y_pred_log = X_design @ self.m_N
-        pred_variance = (1 / self.beta) + np.sum((X_design @ self.S_N) * X_design, axis=1)
-        pred_std = np.sqrt(pred_variance)
+        m_N_mat = as_matrix([[v] for v in self.m_N])
+        y_pred_log_arr = matmul(X_design, m_N_mat)
+        y_pred_log = [row[0] for row in y_pred_log_arr]
+        
+        X_S_arr = matmul(X_design, self.S_N)
+        X_S = X_S_arr.tolist() if hasattr(X_S_arr, 'tolist') else X_S_arr
+        
+        pred_variance = []
+        for i in range(len(X_design)):
+            row_sum = 0.0
+            for j in range(len(X_design[0])):
+                row_sum += X_S[i][j] * X_design[i][j]
+            pred_variance.append((1.0 / self.beta) + row_sum)
+            
+        pred_std = [math.sqrt(v) for v in pred_variance]
         
         z_score = 1.96
-        lower_log = y_pred_log - z_score * pred_std
-        upper_log = y_pred_log + z_score * pred_std
+        lower_log = [y_pred_log[i] - z_score * pred_std[i] for i in range(len(y_pred_log))]
+        upper_log = [y_pred_log[i] + z_score * pred_std[i] for i in range(len(y_pred_log))]
         
-        return y_pred_log, lower_log, upper_log
-
-
+        return y_pred_log, pred_std, (lower_log, upper_log)
 
 class KernelRidgeRegression:
     def __init__(self, lam=1.0, gamma=0.1):
@@ -49,35 +95,69 @@ class KernelRidgeRegression:
         self.alpha_coef = None
 
     def _compute_rbf_kernel(self, X1, X2):
-        # Công thức RBF Kernel thuần toán học: K(x,y) = exp(-gamma * ||x-y||^2)
-        sq_dists = cdist(X1, X2, metric='sqeuclidean')
-        return np.exp(-self.gamma * sq_dists)
+        n1 = len(X1)
+        n2 = len(X2)
+        d = len(X1[0])
+        K = [[0.0 for _ in range(n2)] for _ in range(n1)]
+        is_symmetric = (X1 is X2)
+        
+        if is_symmetric:
+            for i in range(n1):
+                K[i][i] = 1.0
+                row_i = X1[i]
+                for j in range(i + 1, n1):
+                    row_j = X2[j]
+                    d_val = math.dist(row_i, row_j)
+                    sq_dist = d_val * d_val
+                    val = math.exp(-self.gamma * sq_dist)
+                    K[i][j] = val
+                    K[j][i] = val
+        else:
+            for i in range(n1):
+                row_i = X1[i]
+                for j in range(n2):
+                    row_j = X2[j]
+                    d_val = math.dist(row_i, row_j)
+                    sq_dist = d_val * d_val
+                    K[i][j] = math.exp(-self.gamma * sq_dist)
+        return K
 
     def fit(self, X, y):
-        self.X_train = X.values if hasattr(X, 'values') else X
-        self.y_train = y.values.flatten() if hasattr(y, 'values') else y.flatten()
+        self.X_train = X.values.tolist() if hasattr(X, 'values') else X.tolist()
         
-        n_samples = self.X_train.shape[0]
+        if hasattr(y, 'values'):
+            self.y_train = y.values.flatten().tolist()
+        else:
+            if hasattr(y, 'flatten'):
+                self.y_train = y.flatten().tolist()
+            else:
+                self.y_train = list(y)
+        
+        n_samples = len(self.X_train)
         K = self._compute_rbf_kernel(self.X_train, self.X_train)
         
-        # Giải hệ phương trình tuyến tính tìm hệ số alpha
-        A = K + self.lam * np.eye(n_samples)
-        self.alpha_coef = np.linalg.solve(A, self.y_train)
+        for i in range(n_samples):
+            K[i][i] += self.lam
+        
+        # Early Stopping
+        alpha_arr = cg_solve(K, self.y_train, tol=1e-4, max_iter=50)
+        self.alpha_coef = alpha_arr.tolist() if hasattr(alpha_arr, 'tolist') else alpha_arr
+            
         return self
 
     def predict(self, X):
-        X_test = X.values if hasattr(X, 'values') else X
+        X_test = X.values.tolist() if hasattr(X, 'values') else X.tolist()
         K_test = self._compute_rbf_kernel(X_test, self.X_train)
-        return K_test @ self.alpha_coef
-    
-
+        
+        pred_list = [sum(map(operator.mul, row, self.alpha_coef)) for row in K_test]
+            
+        return pred_list
 
 
 def plot_kernel_diagnostics(y_true_log, y_pred_log, X_train=None, X_test=None, gamma=None, lam=None):
     """
-    biểu đồ chẩn đoán phần dư cho Kernel RBF
-    gồm Scale-Location và Cook's Distance theo yêu cầu.
-    input: y_true_log, y_pred_log (giá trị thực tế và dự đoán ở không gian Logarit)
+    Vẽ 8 biểu đồ chẩn đoán phần dư cho mô hình phi tuyến (Kernel RBF)
+    Đầu vào: y_true_log, y_pred_log (giá trị thực tế và dự đoán ở không gian Logarit)
     X_train, X_test, gamma, lam: Các tham số tùy chọn để xấp xỉ Cook's Distance cho Kernel
     """
     y_true_real = np.expm1(np.array(y_true_log).flatten())
@@ -143,12 +223,13 @@ def plot_kernel_diagnostics(y_true_log, y_pred_log, X_train=None, X_test=None, g
 
     # 8. Cook's Distance
     # Do Kernel RBF là mô hình phi tuyến, xấp xỉ Cook's Distance dựa trên phần dư chuẩn hóa
-    # Nếu được cung cấp đủ ma trận, sẽ tính xấp xỉ Leverage, ngược lại dùng xấp xỉ đơn giản
+    # Nếu được cung cấp đủ ma trận, sẽ tính xấp xỉ Leverage, ngược lại dùng xấp xỉ đơn giản.
     n = len(residuals)
     p_approx = X_train.shape[1] if X_train is not None else 10
     
     if X_train is not None and X_test is not None and gamma is not None and lam is not None:
         from scipy.spatial.distance import cdist
+        # Sử dụng hàm chuẩn để có độ chính xác cao nhất khi đánh giá (Kiểm chứng)
         K_test = np.exp(-gamma * cdist(X_test, X_train, metric='sqeuclidean'))
         K_train = np.exp(-gamma * cdist(X_train, X_train, metric='sqeuclidean'))
         A_inv = np.linalg.pinv(K_train + lam * np.eye(len(X_train)))
@@ -168,4 +249,3 @@ def plot_kernel_diagnostics(y_true_log, y_pred_log, X_train=None, X_test=None, g
 
     plt.tight_layout()
     plt.show()
-
