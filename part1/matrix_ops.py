@@ -1,4 +1,5 @@
 import math
+import operator
 
 
 class Vector(list):
@@ -12,51 +13,50 @@ class Vector(list):
     def tolist(self):
         return list(self)
 
+    def _binary(self, other, op):
+        if _is_scalar(other):
+            return Vector(op(float(x), float(other)) for x in self)
+        other = as_vector(other)
+        return Vector(op(float(a), float(b)) for a, b in zip(self, other))
+
     def __add__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(x + other for x in self)
-        return Vector(x + y for x, y in zip(self, other))
+        return self._binary(other, lambda a, b: a + b)
 
     def __radd__(self, other):
         return self.__add__(other)
 
     def __sub__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(x - other for x in self)
-        return Vector(x - y for x, y in zip(self, other))
+        return self._binary(other, lambda a, b: a - b)
 
     def __rsub__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(other - x for x in self)
-        return Vector(y - x for x, y in zip(self, other))
+        if _is_scalar(other):
+            return Vector(float(other) - float(x) for x in self)
+        other = as_vector(other)
+        return Vector(float(a) - float(b) for a, b in zip(other, self))
 
     def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(x * other for x in self)
-        return Vector(x * y for x, y in zip(self, other))
+        return self._binary(other, lambda a, b: a * b)
 
     def __rmul__(self, other):
         return self.__mul__(other)
 
     def __truediv__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(x / other for x in self)
-        return Vector(x / y for x, y in zip(self, other))
+        return self._binary(other, lambda a, b: a / b)
 
-    def __rtruediv__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(other / x for x in self)
-        return Vector(y / x for x, y in zip(self, other))
+    def __pow__(self, power):
+        return Vector(float(x) ** power for x in self)
 
-    def __pow__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(x ** other for x in self)
-        return Vector(x ** y for x, y in zip(self, other))
+    def __lt__(self, other):
+        return self._binary(other, lambda a, b: a < b)
 
-    def __rpow__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector(other ** x for x in self)
-        return Vector(y ** x for x, y in zip(self, other))
+    def __le__(self, other):
+        return self._binary(other, lambda a, b: a <= b)
+
+    def __gt__(self, other):
+        return self._binary(other, lambda a, b: a > b)
+
+    def __ge__(self, other):
+        return self._binary(other, lambda a, b: a >= b)
 
 
 class Matrix(list):
@@ -66,164 +66,254 @@ class Matrix(list):
             return (0, 0)
         return (len(self), len(self[0]))
 
-    def __add__(self, other):
-        if isinstance(other, (int, float)):
-            return Matrix([[v + other for v in row] for row in self])
-        return Matrix([[a + b for a, b in zip(row_a, row_b)] for row_a, row_b in zip(self, other)])
+    @property
+    def T(self):
+        return transpose(self)
 
-    def __radd__(self, other):
-        return self.__add__(other)
+    def tolist(self):
+        return [list(row) for row in self]
 
-    def __sub__(self, other):
-        if isinstance(other, (int, float)):
-            return Matrix([[v - other for v in row] for row in self])
-        return Matrix([[a - b for a, b in zip(row_a, row_b)] for row_a, row_b in zip(self, other)])
-
-    def __rsub__(self, other):
-        if isinstance(other, (int, float)):
-            return Matrix([[other - v for v in row] for row in self])
-        return Matrix([[b - a for a, b in zip(row_a, row_b)] for row_a, row_b in zip(self, other)])
-
-    def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            return Matrix([[v * other for v in row] for row in self])
-        return Matrix([[a * b for a, b in zip(row_a, row_b)] for row_a, row_b in zip(self, other)])
-
-    def __rmul__(self, other):
-        return self.__mul__(other)
-
-    def __truediv__(self, other):
-        if isinstance(other, (int, float)):
-            return Matrix([[v / other for v in row] for row in self])
-        return Matrix([[a / b for a, b in zip(row_a, row_b)] for row_a, row_b in zip(self, other)])
+    def __matmul__(self, other):
+        if is_matrix_like(other):
+            return matmul(self, other)
+        return matvec(self, other)
 
 
-def as_vector(x):
-    if isinstance(x, (int, float)):
-        return Vector([float(x)])
-    if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list):
-        if len(x[0]) == 1:
-            return Vector(float(row[0]) for row in x)
-        elif len(x) == 1:
-            return Vector(float(v) for v in x[0])
-        else:
-            return Vector(v for row in x for v in row)
-    return Vector(float(v) for v in x)
+def _is_scalar(value):
+    return isinstance(value, (int, float))
 
 
-def as_matrix(X):
-    if not isinstance(X, list):
-        X = list(X)
-    if len(X) == 0:
-        return Matrix([])
-    if not isinstance(X[0], list):
-        return Matrix([[float(v)] for v in X])
-    return Matrix([[float(v) for v in row] for row in X])
+def _raw_list(data):
+    if isinstance(data, (Vector, Matrix)):
+        return data.tolist()
+    if hasattr(data, "tolist"):
+        data = data.tolist()
+    return data
 
 
-def transpose(A):
-    return Matrix([list(row) for row in zip(*A)])
+def is_matrix_like(data):
+    data = _raw_list(data)
+    return bool(data) and isinstance(data[0], (list, tuple, Vector))
 
 
-def matmul(A, B):
-    B_t = transpose(B)
-    return Matrix([[sum(a * b for a, b in zip(row, col)) for col in B_t] for row in A])
+def as_vector(data):
+    if isinstance(data, Vector):
+        return data
+    data = _raw_list(data)
+    if isinstance(data, (int, float)):
+        return Vector([float(data)])
+    if not data:
+        return Vector()
+    if isinstance(data[0], (list, tuple, Vector)):
+        return Vector(float(row[0]) for row in data)
+    return Vector(float(x) for x in data)
 
 
-def matvec(A, x):
-    return Vector([sum(a * b for a, b in zip(row, x)) for row in A])
-
-
-def dot(x, y):
-    return sum(a * b for a, b in zip(x, y))
-
-
-def identity(n):
-    return Matrix([[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)])
-
-
-def add_intercept(X):
-    return Matrix([[1.0] + list(row) for row in X])
+def as_matrix(data):
+    if isinstance(data, Matrix):
+        return data
+    data = _raw_list(data)
+    if not data:
+        return Matrix()
+    if not isinstance(data[0], (list, tuple, Vector)):
+        return Matrix([[float(x)] for x in data])
+    return Matrix(Vector(float(x) for x in row) for row in data)
 
 
 def zeros(rows, cols):
     return Matrix([[0.0 for _ in range(cols)] for _ in range(rows)])
 
 
-def copy_matrix(A):
-    return Matrix([list(row) for row in A])
+def identity(n):
+    return Matrix([[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)])
 
 
-def residuals(y, y_hat):
-    return Vector(yi - yh for yi, yh in zip(y, y_hat))
+def transpose(A):
+    A = as_matrix(A)
+    if not A:
+        return Matrix()
+    return Matrix([[A[i][j] for i in range(len(A))] for j in range(len(A[0]))])
 
 
-def vector_norm2(x):
-    return dot(x, x)
+def dot(u, v):
+    u = as_vector(u)
+    v = as_vector(v)
+    return sum(map(operator.mul, u, v))
 
 
-def mean(x):
-    return sum(x) / len(x)
+def matvec(A, v):
+    A = as_matrix(A)
+    v = as_vector(v)
+    return Vector(dot(row, v) for row in A)
 
 
-def center(x):
-    m = mean(x)
-    return Vector(v - m for v in x)
-
-
-def scalar_multiply(A, c):
-    return Matrix([[c * value for value in row] for row in A])
+def matmul(A, B):
+    A = as_matrix(A)
+    B = as_matrix(B)
+    Bt = transpose(B)
+    return Matrix([[dot(row, col) for col in Bt] for row in A])
 
 
 def matrix_add(A, B):
-    return Matrix([[a + b for a, b in zip(row_a, row_b)] for row_a, row_b in zip(A, B)])
+    A = as_matrix(A)
+    B = as_matrix(B)
+    return Matrix([[A[i][j] + B[i][j] for j in range(len(A[0]))] for i in range(len(A))])
 
 
 def matrix_sub(A, B):
-    return Matrix([[a - b for a, b in zip(row_a, row_b)] for row_a, row_b in zip(A, B)])
+    A = as_matrix(A)
+    B = as_matrix(B)
+    return Matrix([[A[i][j] - B[i][j] for j in range(len(A[0]))] for i in range(len(A))])
+
+
+def add_to_diagonal(A, value, skip_first=False):
+    A = as_matrix(A)
+    out = Matrix([Vector(row) for row in A])
+    start = 1 if skip_first else 0
+    for i in range(start, min(len(out), len(out[0]))):
+        out[i][i] += value
+    return out
+
+
+def solve(A, b, tol=1e-12):
+    A = as_matrix(A)
+    b = as_vector(b)
+    n = len(A)
+    if n == 0 or any(len(row) != n for row in A):
+        raise ValueError("A must be a non-empty square matrix")
+    if len(b) != n:
+        raise ValueError("b length must match A")
+
+    aug = [list(A[i]) + [b[i]] for i in range(n)]
+
+    for col in range(n):
+        pivot = max(range(col, n), key=lambda r: abs(aug[r][col]))
+        if abs(aug[pivot][col]) < tol:
+            raise ValueError("Matrix is singular or nearly singular")
+        if pivot != col:
+            aug[col], aug[pivot] = aug[pivot], aug[col]
+
+        pivot_value = aug[col][col]
+        aug[col][col:] = [val / pivot_value for val in aug[col][col:]]
+
+        for r in range(n):
+            if r == col:
+                continue
+            factor = aug[r][col]
+            if abs(factor) < tol:
+                continue
+            aug[r][col:] = [ar - factor * ac for ar, ac in zip(aug[r][col:], aug[col][col:])]
+
+    return Vector(aug[i][n] for i in range(n))
+
+
+def cg_solve(A, b, tol=1e-8, max_iter=2000):
+    A = as_matrix(A)
+    b = as_vector(b)
+    n = len(b)
+    if not n:
+        return Vector()
+    x = Vector([0.0] * n)
+    r = Vector(list(b))
+    p = Vector(list(r))
+    rsold = sum(map(operator.mul, r, r))
+    for i in range(max_iter):
+        Ap = [sum(map(operator.mul, row, p)) for row in A]
+        p_Ap = sum(map(operator.mul, p, Ap))
+        if p_Ap == 0:
+            break
+        alpha = rsold / p_Ap
+        x = [xj + alpha * pj for xj, pj in zip(x, p)]
+        r = [rj - alpha * apj for rj, apj in zip(r, Ap)]
+        rsnew = sum(map(operator.mul, r, r))
+        if math.sqrt(rsnew) < tol:
+            break
+        ratio = rsnew / rsold
+        p = [rj + ratio * pj for rj, pj in zip(r, p)]
+        rsold = rsnew
+    return Vector(x)
+
+def inverse(A):
+    A = as_matrix(A)
+    n = len(A)
+    cols = []
+    for j in range(n):
+        e = [0.0] * n
+        e[j] = 1.0
+        cols.append(solve(A, e))
+    return transpose(cols)
+
+
+def mean(values):
+    values = as_vector(values)
+    return sum(values) / len(values)
+
+
+def variance(values):
+    values = as_vector(values)
+    m = mean(values)
+    return sum((x - m) ** 2 for x in values) / len(values)
+
+
+def sum_squares(values):
+    values = as_vector(values)
+    return sum(map(operator.mul, values, values))
 
 
 def diag(A):
-    n = min(len(A), len(A[0]))
-    return Vector([A[i][i] for i in range(n)])
-
-
-def add_to_diagonal(A, lam):
-    n = len(A)
-    return Matrix([[A[i][j] + (lam if i == j else 0.0) for j in range(n)] for i in range(n)])
-
-
-def sum_squares(x):
-    return sum(v * v for v in x)
-
-
-def all_close(a, b, atol=1e-8):
-    a_flat = as_vector(a)
-    b_flat = as_vector(b)
-    if len(a_flat) != len(b_flat):
-        return False
-    return all(abs(x - y) <= atol for x, y in zip(a_flat, b_flat))
-
-
-def column(A, j):
-    return Vector([row[j] for row in A])
-
-
-def column_stack(cols):
-    n = len(cols[0])
-    return Matrix([[col[i] for col in cols] for i in range(n)])
-
-
-def frobenius_norm(A):
-    return math.sqrt(sum(v * v for row in A for v in row))
+    A = as_matrix(A)
+    return Vector(A[i][i] for i in range(min(len(A), len(A[0]))))
 
 
 def trace(A):
-    return sum(A[i][i] for i in range(len(A)))
+    return sum(diag(A))
+
+
+def frobenius_norm(A):
+    A = as_matrix(A)
+    return math.sqrt(sum(map(operator.mul, (x for row in A for x in row), (x for row in A for x in row))))
+
+
+def all_close(a, b, atol=1e-8):
+    a = _raw_list(a)
+    b = _raw_list(b)
+    if is_matrix_like(a) or is_matrix_like(b):
+        A = as_matrix(a)
+        B = as_matrix(b)
+        return len(A) == len(B) and all(
+            len(A[i]) == len(B[i]) and all(abs(A[i][j] - B[i][j]) <= atol for j in range(len(A[i])))
+            for i in range(len(A))
+        )
+    u = as_vector(a)
+    v = as_vector(b)
+    return len(u) == len(v) and all(abs(x - y) <= atol for x, y in zip(u, v))
+
+
+def column(A, j):
+    A = as_matrix(A)
+    return Vector(row[j] for row in A)
 
 
 def without_column(A, j):
+    A = as_matrix(A)
     return Matrix([[row[k] for k in range(len(row)) if k != j] for row in A])
+
+
+def column_stack(columns):
+    cols = [as_vector(col) for col in columns]
+    if not cols:
+        return Matrix()
+    return Matrix([[col[i] for col in cols] for i in range(len(cols[0]))])
+
+
+def take_rows(A, indices):
+    A = as_matrix(A)
+    return Matrix([A[i] for i in indices])
+
+
+def take_values(v, indices):
+    v = as_vector(v)
+    return Vector(v[i] for i in indices)
 
 
 def logspace(start, stop, num):
@@ -231,89 +321,6 @@ def logspace(start, stop, num):
         return Vector([10.0 ** start])
     step = (stop - start) / (num - 1)
     return Vector(10.0 ** (start + i * step) for i in range(num))
-
-
-def take_rows(A, indices):
-    return Matrix([A[i] for i in indices])
-
-
-def take_values(x, indices):
-    return Vector([x[i] for i in indices])
-
-
-def solve(A, b, tol=1e-12):
-    # Giải hệ A x = b bằng khử Gauss--Jordan có chọn pivot.
-    n = len(A)
-    M = [list(row) + [float(rhs)] for row, rhs in zip(A, b)]
-
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(M[r][col]))
-        if abs(M[pivot][col]) < tol:
-            raise ValueError("Singular matrix in linear solve")
-        M[col], M[pivot] = M[pivot], M[col]
-
-        pivot_value = M[col][col]
-        M[col] = [value / pivot_value for value in M[col]]
-
-        for row in range(n):
-            if row == col:
-                continue
-            factor = M[row][col]
-            M[row] = [a - factor * b for a, b in zip(M[row], M[col])]
-
-    return [M[i][-1] for i in range(n)]
-
-
-def inverse(A):
-    n = len(A)
-    columns = []
-    for j in range(n):
-        e = [0.0] * n
-        e[j] = 1.0
-        columns.append(solve(A, e))
-    return transpose(columns)
-
-
-def determinant(A):
-    M = copy_matrix(A)
-    n = len(M)
-    det = 1.0
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(M[r][col]))
-        if abs(M[pivot][col]) < 1e-12:
-            return 0.0
-        if pivot != col:
-            M[col], M[pivot] = M[pivot], M[col]
-            det *= -1.0
-        det *= M[col][col]
-        for row in range(col + 1, n):
-            factor = M[row][col] / M[col][col]
-            for k in range(col, n):
-                M[row][k] -= factor * M[col][k]
-    return det
-
-
-def rank(A, tol=1e-10):
-    M = copy_matrix(A)
-    rows, cols = len(M), len(M[0])
-    rank_value = 0
-    for col in range(cols):
-        pivot = None
-        for row in range(rank_value, rows):
-            if abs(M[row][col]) > tol:
-                pivot = row
-                break
-        if pivot is None:
-            continue
-        M[rank_value], M[pivot] = M[pivot], M[rank_value]
-        pivot_value = M[rank_value][col]
-        M[rank_value] = [v / pivot_value for v in M[rank_value]]
-        for row in range(rows):
-            if row != rank_value:
-                factor = M[row][col]
-                M[row] = [a - factor * b for a, b in zip(M[row], M[rank_value])]
-        rank_value += 1
-    return rank_value
 
 
 def max_abs_diff(a, b):

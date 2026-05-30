@@ -29,8 +29,15 @@ def ridge_fit(X, y, lam):
 
     X = as_matrix(X)
     y = as_vector(y)
+    
+    is_intercept = True
+    for row in X:
+        if abs(row[0] - 1.0) > 1e-12:
+            is_intercept = False
+            break
+            
     Xt = transpose(X)
-    A = add_to_diagonal(matmul(Xt, X), lam)
+    A = add_to_diagonal(matmul(Xt, X), lam, skip_first=is_intercept)
     b = matvec(Xt, y)
     return _solve_linear_system(A, b)
 

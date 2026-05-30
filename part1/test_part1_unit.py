@@ -204,15 +204,15 @@ class TestRidgeFit(unittest.TestCase):
         beta_small = ridge_fit(X, y, lam=0.1)
         beta_large = ridge_fit(X, y, lam=100.0)
         
-        norm_small = norm2(beta_small)
-        norm_large = norm2(beta_large)
+        norm_small = norm2(beta_small[1:])
+        norm_large = norm2(beta_large[1:])
         
-        print(f"Độ dài L2 hệ số khi lambda = 0.1: {norm_small:.4f}")
-        print(f"Độ dài L2 hệ số khi lambda = 100: {norm_large:.4f}")
+        print(f"Độ dài L2 hệ số đặc trưng (không gồm intercept) khi lambda = 0.1: {norm_small:.4f}")
+        print(f"Độ dài L2 hệ số đặc trưng (không gồm intercept) khi lambda = 100: {norm_large:.4f}")
         print(f"Tỷ lệ co nhỏ: {norm_large / norm_small * 100:.2f}%")
         
         self.assertLess(norm_large, norm_small)
-        print("-> ĐẠT: Phạt L2 làm giảm chuẩn của vector hệ số đúng như lý thuyết.")
+        print("-> ĐẠT: Phạt L2 làm giảm chuẩn của vector hệ số đặc trưng đúng như lý thuyết.")
 
     def test_plot_ridge_trace_runs(self):
         X = [[1, 0], [1, 1], [1, 2], [1, 3]]
