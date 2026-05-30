@@ -73,12 +73,15 @@ Group_02/
 |   |-- residual_analysis.py
 |   |-- cross_validation.py
 |   |-- part1_notebook.ipynb
+|   |-- test_part1_unit.py    # Kiểm thử đơn vị cho các thuật toán Phần 1
 |-- part2/
 |   |-- data/
 |   |   |-- city_day.csv      # Tập dữ liệu chất lượng không khí thực tế
 |   |-- data_pipeline.py
 |   |-- model_comparison.py
+|   |-- advanced_methods.py   # Hồi quy Bayes và Kernel Ridge nâng cao
 |   |-- part2_notebook.ipynb
+|   |-- test_part2_unit.py    # Kiểm thử đơn vị cho pipeline và mô hình
 ```
 
 ---
