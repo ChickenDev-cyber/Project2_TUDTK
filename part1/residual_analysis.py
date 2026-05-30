@@ -12,25 +12,32 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 def _residual_diagnostics(X, y, beta_hat):
+    # Dinh dang dau vao cua cac ma tran dac trung va vector ket qua.
     X = as_matrix(X)
     y = as_vector(y)
     beta_hat = as_vector(beta_hat)
 
+    # Lay so luong quan sat (n) va so bien giai thich (p).
     n, p_plus_1 = len(X), len(X[0])
     p = p_plus_1 - 1
+    # Tinh gia tri du bao (y_hat) va phan du tho (e_i = y_i - y_hat_i).
     y_hat = matvec(X, beta_hat)
     residuals = y - y_hat
 
+    # Tinh ma tran chieu H de lay gia tri don bay (leverage) tu duong cheo h_ii.
     H = hat_matrix(X)
     leverage = diag(H)
 
+    # Tinh tong binh phuong phan du (RSS) va phuong sai sai so uoc luong sigma2.
     RSS = sum_squares(residuals)
     sigma2_hat = RSS / (n - p - 1)
 
+    # Tinh phan du chuan hoa: chia cho do lech tieu chuan co dieu chinh he so don bay (1 - h_ii).
     std_residuals = [
         residuals[i] / math.sqrt(sigma2_hat * (1 - leverage[i] + 1e-10))
         for i in range(n)
     ]
+    # Tinh khoang cach Cook de phan tich muc do anh huong cua tung diem du lieu.
     cooks_d = [
         (std_residuals[i] ** 2 / (p + 1)) * (leverage[i] / (1 - leverage[i] + 1e-10))
         for i in range(n)
@@ -39,21 +46,19 @@ def _residual_diagnostics(X, y, beta_hat):
 
 
 def residual_plots(X, y, beta_hat):
-    """
-    Vẽ 4 biểu đồ phân tích phần dư.
-    Phần tính toán chẩn đoán dùng các hàm đại số tự cài đặt; matplotlib chỉ dùng để vẽ.
-    """
+    # Vẽ 4 biểu đồ phân tích phần dư.
+    # Phần tính toán chẩn đoán dùng các hàm đại số tự cài đặt; matplotlib chỉ dùng để vẽ.
     y_hat, residuals, std_residuals, cooks_d = _residual_diagnostics(X, y, beta_hat)
     n = len(y_hat)
 
     fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('Residual Analysis Plots', fontsize=16)
+    fig.suptitle('Biểu đồ chẩn đoán phần dư', fontsize=16)
 
     axs[0, 0].scatter(y_hat, residuals, alpha=0.6, edgecolors='k')
     axs[0, 0].axhline(0, color='red', linestyle='dashed')
-    axs[0, 0].set_title('Residuals vs Fitted')
-    axs[0, 0].set_xlabel('Fitted values')
-    axs[0, 0].set_ylabel('Residuals')
+    axs[0, 0].set_title('Phần dư và giá trị dự báo')
+    axs[0, 0].set_xlabel('Giá trị dự báo')
+    axs[0, 0].set_ylabel('Phần dư')
 
     sorted_res = sorted(std_residuals)
     normal = NormalDist()
@@ -62,21 +67,21 @@ def residual_plots(X, y, beta_hat):
     line_min = min(min(theoretical), min(sorted_res))
     line_max = max(max(theoretical), max(sorted_res))
     axs[0, 1].plot([line_min, line_max], [line_min, line_max], color='red', linestyle='dashed')
-    axs[0, 1].set_title('Normal Q-Q Plot')
-    axs[0, 1].set_xlabel('Theoretical Quantiles')
-    axs[0, 1].set_ylabel('Standardized Residuals')
+    axs[0, 1].set_title('Biểu đồ Q-Q phân phối chuẩn')
+    axs[0, 1].set_xlabel('Phân vị lý thuyết')
+    axs[0, 1].set_ylabel('Phần dư chuẩn hóa')
 
     scale_location = [math.sqrt(abs(v)) for v in std_residuals]
     axs[1, 0].scatter(y_hat, scale_location, alpha=0.6, edgecolors='k')
-    axs[1, 0].set_title('Scale-Location')
-    axs[1, 0].set_xlabel('Fitted values')
-    axs[1, 0].set_ylabel('Sqrt(|Standardized Residuals|)')
+    axs[1, 0].set_title('Biểu đồ vị trí - tỷ lệ')
+    axs[1, 0].set_xlabel('Giá trị dự báo')
+    axs[1, 0].set_ylabel('Căn |Phần dư chuẩn hóa|')
 
     axs[1, 1].bar(range(n), cooks_d, alpha=0.6, color='b')
     axs[1, 1].axhline(y=4 / n, color='red', linestyle='dashed', label='Ngưỡng tham chiếu (4/n)')
-    axs[1, 1].set_title("Cook's Distance")
-    axs[1, 1].set_xlabel('Observation Index')
-    axs[1, 1].set_ylabel("Cook's Distance")
+    axs[1, 1].set_title('Khoảng cách Cook')
+    axs[1, 1].set_xlabel('Chỉ số quan sát')
+    axs[1, 1].set_ylabel('Khoảng cách Cook')
     axs[1, 1].legend()
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])

@@ -51,20 +51,18 @@ def _ridge_cv_score(X, y, k, lam):
 
 
 def kfold_cv(X, y, k):
-    """
-    Đánh giá mô hình OLS bằng K-Fold Cross Validation.
-    DEFAULT_RANDOM_STATE được cố định trong module để kết quả tái lập được.
-    """
+    # Đánh giá mô hình OLS bằng K-Fold Cross Validation.
+    # DEFAULT_RANDOM_STATE được cố định trong module để kết quả tái lập được.
     return _ridge_cv_score(X, y, k, lam=0.0)
 
 
 def ridge_cv_score(X, y, k, lam):
-    """Tính CV-MSE cho Ridge với lambda chỉ định, dùng cùng fold với kfold_cv."""
+    # Tính CV-MSE cho Ridge với lambda chỉ định, dùng cùng fold với kfold_cv.
     return _ridge_cv_score(X, y, k, lam)
 
 
 def ridge_lambda_search(X, y, k):
-    """Quét dải lambda mặc định và trả về lambda có CV-MSE nhỏ nhất."""
+    # Quét dải lambda mặc định và trả về lambda có CV-MSE nhỏ nhất.
     cv_scores = Vector(ridge_cv_score(X, y, k, lam) for lam in DEFAULT_LAMBDAS)
     best_idx = min(range(len(cv_scores)), key=lambda i: cv_scores[i])
     best_lam = float(DEFAULT_LAMBDAS[best_idx])
