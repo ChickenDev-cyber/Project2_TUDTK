@@ -51,25 +51,38 @@ Lý do tách riêng `matrix_ops.py`:
 
 ```text
 Project2_TUDTK/
-├── part1/                         # Lý thuyết và minh họa OLS
-│   ├── matrix_ops.py              # Các phép toán ma trận/vector tự cài
-│   ├── ols_implementation.py      # OLS, Hat Matrix, Metrics, VIF
-│   ├── ridge_lasso.py             # Ridge Regression và Lasso
-│   ├── cross_validation.py        # K-Fold Cross-Validation
-│   ├── residual_analysis.py       # Phân tích phần dư
-│   ├── test_part1_unit.py         # Unit test cho Phần 1
-│   └── part1_notebook.ipynb       # Notebook trình bày Phần 1
-├── part2/                         # Ứng dụng trên dữ liệu thực tế
-│   ├── data/
-│   │   └── city_day.csv           # Bộ dữ liệu chất lượng không khí
-│   ├── data_pipeline.py           # Pipeline tiền xử lý dữ liệu
-│   ├── advanced_methods.py        # Các phương pháp/mô hình nâng cao
-│   ├── model_comparison.py        # So sánh mô hình và metric
-│   ├── test_part2_unit.py         # Unit test cho Phần 2
-│   └── part2_notebook.ipynb       # Notebook trình bày Phần 2
-├── requirements.txt               # Danh sách thư viện cần cài
-├── Toan UDTK_Project_2-Data Fitting va OLS.pdf
-└── README.md
+|-- part1/
+|   |-- matrix_ops.py         # Thư viện đại số tuyến tính tự cài đặt từ đầu
+|   |-- ols_implementation.py
+|   |-- ridge_lasso.py
+|   |-- residual_analysis.py
+|   |-- cross_validation.py
+|   |-- part1_notebook.ipynb
+|-- part2/
+|   |-- data/
+|   |-- data_pipeline.py
+|   |-- model_comparison.py
+|   |-- part2_notebook.ipynb
+|-- requirements.txt
+|-- README.md
+report/
+|-- figures/                  # Chứa đồ thị matplotlib xuất ra từ Notebooks
+|-- part1/
+|   |-- p1_intro.tex
+|   |-- p1_theory.tex
+|   |-- p1_results.tex
+|-- part2/
+|   |-- p2_dataset.tex
+|   |-- p2_method.tex
+|   |-- p2_results.tex
+|   |-- p2_conclusion.tex
+|-- 0_covers.tex              # Trang bìa chính và trang bìa phụ
+|-- 0_foreword.tex            # Lời mở đầu
+|-- 0_members.tex             # Phân công nhiệm vụ thành viên nhóm
+|-- overview.tex
+|-- appendix.tex
+|-- tailieu.bib
+|-- main.tex
 ```
 
 ---
@@ -170,14 +183,3 @@ Nếu lệnh trên không in ra kết quả, nghĩa là Phần 1 không còn d�
 - **Cross-Validation:** Giúp chọn lambda dựa trên lỗi kiểm chứng thay vì chọn thủ công.
 - **Residual Analysis:** Các biểu đồ phần dư giúp đánh giá giả thiết tuyến tính, phương sai và điểm ảnh hưởng lớn.
 - **Gauss-Markov:** Mô phỏng Monte Carlo cho thấy OLS có phương sai nhỏ hơn so với một ước lượng tuyến tính không chệch thay thế.
-
----
-
-## ✅ Trạng thái hiện tại
-
-- Phần 1 đã được chỉnh để thuật toán chính không dùng NumPy/SciPy.
-- `matrix_ops.py` đã được thêm để tự cài các phép toán ma trận cần thiết.
-- Unit test Phần 1 đã chạy ổn.
-- Notebook Phần 1 đã được cập nhật để giải thích rõ vai trò của phần tự cài.
-- README đã được viết lại để giáo viên dễ đọc và dễ kiểm tra cấu trúc dự án.
-
