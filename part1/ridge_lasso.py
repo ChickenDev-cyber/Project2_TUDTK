@@ -23,9 +23,7 @@ def _solve_linear_system(A, b):
 
 
 def ridge_fit(X, y, lam):
-    """
-    Tính hệ số Ridge bằng công thức đóng, dùng đại số tuyến tính tự cài đặt.
-    """
+    # Tính hệ số Ridge bằng công thức đóng, dùng đại số tuyến tính tự cài đặt.
     if lam < 0:
         raise ValueError("lam must be non-negative")
 
@@ -45,9 +43,7 @@ def ridge_fit(X, y, lam):
 
 
 def plot_ridge_trace(X, y):
-    """
-    Vẽ Ridge Trace để quan sát hệ số thay đổi như thế nào khi lambda tăng.
-    """
+    # Vẽ Ridge Trace để quan sát hệ số thay đổi như thế nào khi lambda tăng.
     X = as_matrix(X)
     y = as_vector(y)
     lambdas = logspace(-3, 5, 200)
@@ -56,7 +52,8 @@ def plot_ridge_trace(X, y):
     plt.figure(figsize=(10, 6), dpi=100)
     n_features = len(X[0])
     for i in range(n_features):
-        plt.plot(lambdas, [w[i] for w in weights], linewidth=2, label=f'Đặc trưng {i+1}')
+        lbl = 'Intercept' if i == 0 else f'Đặc trưng X{i}'
+        plt.plot(lambdas, [w[i] for w in weights], linewidth=2, label=lbl)
 
     plt.xscale('log')
     plt.title('Biểu đồ Ridge Trace', fontsize=13, fontweight='bold', pad=15)
@@ -69,9 +66,7 @@ def plot_ridge_trace(X, y):
 
 
 def lasso_fit_cd(X, y, lam, max_iter=2000, tol=1e-6):
-    """
-    Cài đặt Lasso Regression bằng Coordinate Descent.
-    """
+    # Cài đặt Lasso Regression bằng Coordinate Descent.
     if lam < 0:
         raise ValueError("lam must be non-negative")
 
@@ -112,27 +107,25 @@ def lasso_fit_cd(X, y, lam, max_iter=2000, tol=1e-6):
 
 
 def test_ridge_fit():
-    print("--- Kiểm tra Ridge Regression ---")
+    print(" Kiểm tra Ridge Regression ")
 
     X1 = [[1, 0], [0, 1]]
     y1 = [1, 2]
     expected_w1 = [1.0, 2.0]
     w1 = ridge_fit(X1, y1, lam=0.0)
-    print("[Ridge] Lambda=0 khớp OLS:", "Giống" if all_close(w1, expected_w1) else "Khác")
+    print("Lambda=0 khớp OLS:", "Giống" if all_close(w1, expected_w1) else "Khác")
 
     X2 = [[1, 0, 2], [1, 1, 3], [1, 2, 4], [1, 3, 5]]
     y2 = [1, 2, 3, 4]
     w_small = ridge_fit(X2, y2, lam=0.1)
     w_big = ridge_fit(X2, y2, lam=1e9)
-    print("[Ridge] Lambda cực lớn -> beta ~ 0:", "Giống" if all(abs(v) < 1e-4 for v in w_big) else "Khác")
+    print("Lambda cực lớn thì hệ số tiến về 0:", "Giống" if all(abs(v) < 1e-4 for v in w_big) else "Khác")
     print(f"  ||beta small||^2 = {sum(v*v for v in w_small):.6f}")
 
 
 def test_lasso_fit_cd():
-    """
-    Unit tests kiểm tra tính đúng đắn của hàm lasso_fit_cd.
-    sklearn chỉ dùng để kiểm chứng kết quả.
-    """
+    # Kiểm thử tính đúng đắn của hàm lasso_fit_cd.
+    # sklearn chỉ dùng để kiểm chứng kết quả.
     from sklearn.linear_model import Lasso as SkLasso
 
     rng = random.Random(42)
@@ -150,17 +143,17 @@ def test_lasso_fit_cd():
     w_sk = [float(sk.intercept_)] + [float(v) for v in sk.coef_]
 
     if all_close(w_cd, w_sk, atol=0.1):
-        print("[Lasso-CD] Hệ số gần với sklearn (atol=0.1): Giống")
+        print("Hệ số gần với sklearn (atol=0.1): Giống")
     else:
-        print("[Lasso-CD] Hệ số gần với sklearn (atol=0.1): Khác")
-        print(f"  CD  : {[round(v, 4) for v in w_cd]}")
-        print(f"  sk  : {[round(v, 4) for v in w_sk]}")
+        print("Hệ số gần với sklearn (atol=0.1): Khác")
+        print(f"Tự cài đặt: {[round(v, 4) for v in w_cd]}")
+        print(f"Thư viện  : {[round(v, 4) for v in w_sk]}")
 
     n_zero_cd = sum(abs(v) < 1e-2 for v in w_cd[1:])
-    print("[Lasso-CD] Tạo nghiệm thưa:", "Giống" if n_zero_cd >= 1 else "Khác")
+    print("Tạo nghiệm thưa:", "Giống" if n_zero_cd >= 1 else "Khác")
 
     w_big = lasso_fit_cd(X, y, lam=1e6, max_iter=1000)
-    print("[Lasso-CD] Lambda cực lớn -> beta[1:] ~ 0:", "Giống" if all(abs(v) < 1e-4 for v in w_big[1:]) else "Khác")
+    print("Lambda cực lớn thì hệ số tiến về 0:", "Giống" if all(abs(v) < 1e-4 for v in w_big[1:]) else "Khác")
 
 
 if __name__ == "__main__":
