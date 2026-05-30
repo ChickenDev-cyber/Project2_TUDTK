@@ -50,7 +50,22 @@ Lý do tách riêng `matrix_ops.py`:
 ## 📂 Sơ đồ Cấu trúc Thư mục
 
 ```text
-Project2_TUDTK/
+Group_02/
+|-- README.md                 # Hướng dẫn chạy và tái lập kết quả nhanh
+|-- requirements.txt          # Danh sách thư viện Python cần cài đặt
+|-- report/                   # Thư mục chứa báo cáo PDF hoàn chỉnh
+|   |-- report.pdf            # Báo cáo chính thức dạng PDF
+|   |-- compile_report/       # Thư mục chứa mã nguồn LaTeX để biên dịch
+|       |-- figures/          # Chứa các đồ thị xuất ra từ Notebooks
+|       |-- part1/
+|       |-- part2/
+|       |-- 0_covers.tex
+|       |-- 0_foreword.tex
+|       |-- 0_members.tex
+|       |-- overview.tex
+|       |-- appendix.tex
+|       |-- tailieu.bib
+|       |-- main.tex
 |-- part1/
 |   |-- matrix_ops.py         # Thư viện đại số tuyến tính tự cài đặt từ đầu
 |   |-- ols_implementation.py
@@ -63,26 +78,6 @@ Project2_TUDTK/
 |   |-- data_pipeline.py
 |   |-- model_comparison.py
 |   |-- part2_notebook.ipynb
-|-- requirements.txt
-|-- README.md
-report/
-|-- figures/                  # Chứa đồ thị matplotlib xuất ra từ Notebooks
-|-- part1/
-|   |-- p1_intro.tex
-|   |-- p1_theory.tex
-|   |-- p1_results.tex
-|-- part2/
-|   |-- p2_dataset.tex
-|   |-- p2_method.tex
-|   |-- p2_results.tex
-|   |-- p2_conclusion.tex
-|-- 0_covers.tex              # Trang bìa chính và trang bìa phụ
-|-- 0_foreword.tex            # Lời mở đầu
-|-- 0_members.tex             # Phân công nhiệm vụ thành viên nhóm
-|-- overview.tex
-|-- appendix.tex
-|-- tailieu.bib
-|-- main.tex
 ```
 
 ---
