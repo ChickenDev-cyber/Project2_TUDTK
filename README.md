@@ -62,7 +62,7 @@ Group_02/
 |       |-- 0_covers.tex
 |       |-- 0_foreword.tex
 |       |-- 0_members.tex
-|       |-- overview.tex
+|       |-- 0_overview.tex
 |       |-- appendix.tex
 |       |-- tailieu.bib
 |       |-- main.tex
