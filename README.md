@@ -65,6 +65,7 @@ Project2_TUDTK/
 │   ├── data_pipeline.py           # Pipeline tiền xử lý dữ liệu
 │   ├── advanced_methods.py        # Các phương pháp/mô hình nâng cao
 │   ├── model_comparison.py        # So sánh mô hình và metric
+│   ├── test_part2_unit.py         # Unit test cho Phần 2
 │   └── part2_notebook.ipynb       # Notebook trình bày Phần 2
 ├── requirements.txt               # Danh sách thư viện cần cài
 ├── Toan UDTK_Project_2-Data Fitting va OLS.pdf
@@ -112,16 +113,25 @@ Trong notebook này, các kết quả chính gồm:
 - Vẽ các biểu đồ phân tích phần dư.
 - Mô phỏng định lý Gauss-Markov bằng Monte Carlo.
 
-### 2. Chạy Unit Test Phần 1
+### 2. Chạy Kiểm Thử Đơn Vị (Unit Test) Phần 1
 
-Để kiểm tra nhanh các hàm tự cài:
+Để chạy kiểm thử tự động và xuất báo cáo đối chiếu chi tiết với thư viện chuẩn (sklearn):
 
 ```bash
 cd part1
-python -m unittest test_part1_unit.py
+python test_part1_unit.py
 ```
 
-### 3. Chạy Notebook Phần 2
+### 3. Chạy Kiểm Thử Đơn Vị (Unit Test) Phần 2
+
+Để chạy kiểm thử tự động cho phần xử lý dữ liệu và mô hình thực tế:
+
+```bash
+cd part2
+python test_part2_unit.py
+```
+
+### 4. Chạy Notebook Phần 2
 
 Notebook Phần 2 trình bày quá trình xử lý dữ liệu thực tế và so sánh mô hình:
 
@@ -138,7 +148,7 @@ jupyter notebook part2/part2_notebook.ipynb
 ```bash
 cd part1
 python -m py_compile matrix_ops.py ols_implementation.py ridge_lasso.py cross_validation.py residual_analysis.py test_part1_unit.py
-python -m unittest test_part1_unit.py
+python test_part1_unit.py
 ```
 
 Để kiểm tra Phần 1 không còn gọi NumPy/SciPy trong code/notebook:
