@@ -75,6 +75,7 @@ Group_02/
 |   |-- part1_notebook.ipynb
 |-- part2/
 |   |-- data/
+|   |   |-- city_day.csv      # Tập dữ liệu chất lượng không khí thực tế
 |   |-- data_pipeline.py
 |   |-- model_comparison.py
 |   |-- part2_notebook.ipynb
